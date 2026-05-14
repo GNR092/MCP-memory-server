@@ -1,0 +1,8 @@
+node_modules/
+.codesearch.db/
+*.db
+.git/
+.gitignore
+memorydata/
+build.sh
+docker-compose.yml

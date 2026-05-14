@@ -1,0 +1,5 @@
+#!/bin/bash
+trap 'kill -SIGTERM $PID; wait $PID' SIGTERM
+mcp-proxy --port 8945 --host 0.0.0.0 -e MEMORY_DB_PATH "/data/memory.db" -- memento &
+PID=$!
+wait $PID
