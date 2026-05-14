@@ -29,6 +29,10 @@ docker-compose up --build
 
 La base de datos se guarda en `/data/memory.db` dentro del contenedor.
 
+## Notas
+
+- `docker-compose.yml` está excluido del control de versiones por contener configuración sensible de despliegue.
+
 ## Autor
 
 - **Gener Can Dzul** - [GNR092](https://github.com/GNR092)
