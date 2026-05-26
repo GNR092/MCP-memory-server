@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory Graph Viewer</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            dark: '#1a1a2e',
+            darkpanel: 'rgba(0,0,0,0.85)',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .node { stroke: #fff; stroke-width: 1.5px; cursor: pointer; }
+    .node:hover { stroke-width: 3px; }
+    .link { stroke: #4a4a6a; stroke-opacity: 0.6; }
+    .label { fill: #ccc; font-size: 10px; pointer-events: none; }
+  </style>
+</head>
+<body class="bg-dark text-gray-200 overflow-hidden" x-data="graphApp()">
+
+  <div class="fixed top-4 left-4 bg-darkpanel rounded-lg p-3 text-sm border border-gray-700 flex items-center gap-4 z-50">
+    <span>Nodos: <span class="text-blue-400" x-text="nodeCount">0</span></span>
+    <span>Enlaces: <span class="text-blue-400" x-text="linkCount">0</span></span>
+    <span>Updates: <span class="text-blue-400" x-text="updateCount">0</span></span>
+    <span class="text-gray-500 text-xs" x-text="lastUpdateText">Sin cambios detectados</span>
+    <button @click="forceRefresh()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs">Actualizar ahora</button>
+  </div>
+
+  <div class="fixed top-4 right-4 bg-darkpanel rounded-lg p-3 text-xs border border-gray-700 z-50">
+    <h4 class="text-gray-400 uppercase mb-2">Filtros</h4>
+    <template x-for="type in ['critical', 'important', 'normal', 'temporary', 'deprecated', 'unknown']" :key="type">
+      <label class="flex items-center gap-2 mb-1 cursor-pointer">
+        <input type="checkbox" x-model="activeFilters" :value="type" class="rounded bg-gray-700 border-gray-600">
+        <div class="w-3 h-3 rounded-full" :style="{ background: colorMap[type] }"></div>
+        <span class="capitalize" x-text="type"></span>
+      </label>
+    </template>
+  </div>
+
+  <div class="fixed bottom-4 left-4 bg-darkpanel rounded-lg p-3 text-xs border border-gray-700 z-50">
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#ff6b6b"></div> critical</div>
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#ffd93d"></div> important</div>
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#6bcb77"></div> normal</div>
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#4d96ff"></div> temporary</div>
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#9d4edd"></div> deprecated</div>
+    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#aaa"></div> unknown</div>
+  </div>
+
+  <div x-show="selectedNode" x-cloak
+    class="fixed top-20 right-4 w-80 max-h-[calc(100vh-120px)] bg-darkpanel rounded-lg border border-gray-700 overflow-hidden flex flex-col z-50">
+    <div class="px-4 py-3 bg-gray-800/90 border-b border-gray-700 flex justify-between items-center">
+      <h3 class="text-sm font-medium text-blue-400" x-text="selectedNode?.name">-</h3>
+      <button @click="selectedNode = null" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
+    </div>
+    <div class="p-4 overflow-y-auto flex-1">
+      <p class="text-xs text-gray-500 mb-4 capitalize" x-text="selectedNode?.group">-</p>
+
+      <template x-if="loadingDetail">
+        <p class="text-gray-500 text-xs text-center py-4">Cargando...</p>
+      </template>
+
+      <template x-if="!loadingDetail && entityDetail">
+        <div>
+          <h4 class="text-xs text-gray-600 uppercase mb-2">Observaciones</h4>
+          <template x-if="entityDetail.observations.length === 0">
+            <p class="text-gray-600 text-xs italic mb-4">Sin observaciones</p>
+          </template>
+          <template x-for="obs in entityDetail.observations" :key="obs.id">
+            <div class="bg-white/5 rounded p-2 mb-2 text-xs">
+              <p class="text-gray-300 leading-relaxed" x-text="obs.content"></p>
+              <p class="text-gray-600 text-xs mt-1" x-text="'Creado: ' + formatDate(obs.created_at) + ' | ' + obs.importance"></p>
+            </div>
+          </template>
+
+          <h4 class="text-xs text-gray-600 uppercase mb-2 mt-4">Relaciones salientes</h4>
+          <template x-if="entityDetail.outgoing.length === 0">
+            <p class="text-gray-600 text-xs italic mb-4">Sin relaciones</p>
+          </template>
+          <template x-for="rel in entityDetail.outgoing" :key="rel.id">
+            <div class="bg-white/5 rounded p-2 mb-1 text-xs flex justify-between">
+              <span class="text-blue-400" x-text="rel.relationType"></span>
+              <span class="text-gray-400" x-text="rel.to_name"></span>
+            </div>
+          </template>
+
+          <h4 class="text-xs text-gray-600 uppercase mb-2 mt-4">Relaciones entrantes</h4>
+          <template x-if="entityDetail.incoming.length === 0">
+            <p class="text-gray-600 text-xs italic">Sin relaciones</p>
+          </template>
+          <template x-for="rel in entityDetail.incoming" :key="rel.id">
+            <div class="bg-white/5 rounded p-2 mb-1 text-xs flex justify-between">
+              <span class="text-gray-400" x-text="rel.from_name"></span>
+              <span class="text-blue-400" x-text="rel.relationType"></span>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <svg id="graph" class="w-screen h-screen"></svg>
+
+  <script>
+    var colorMap = {
+      critical: '#ff6b6b',
+      important: '#ffd93d',
+      normal: '#6bcb77',
+      temporary: '#4d96ff',
+      deprecated: '#9d4edd',
+      unknown: '#aaa'
+    };
+
+    function graphApp() {
+      return {
+        nodeCount: 0,
+        linkCount: 0,
+        updateCount: 0,
+        lastUpdateText: 'Sin cambios detectados',
+        selectedNode: null,
+        entityDetail: null,
+        loadingDetail: false,
+        activeFilters: ['critical', 'important', 'normal', 'temporary', 'deprecated', 'unknown'],
+        _initialized: false,
+
+        init() {
+          if (this._initialized) {
+            console.warn('[INIT] Already initialized, skipping');
+            return;
+          }
+          this._initialized = true;
+          console.log('[INIT] Starting initialization');
+          var width = window.innerWidth;
+          var height = window.innerHeight;
+
+          var svg = d3.select('#graph')
+            .attr('width', width)
+            .attr('height', height);
+
+          var g = svg.append('g');
+
+          var zoom = d3.zoom()
+            .scaleExtent([0.1, 10])
+            .on('zoom', function(e) { g.attr('transform', e.transform); });
+          svg.call(zoom);
+
+          var simulation = d3.forceSimulation()
+            .force('link', d3.forceLink().id(function(d) { return d.id; }).distance(80))
+            .force('charge', d3.forceManyBody().strength(-200))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(30))
+            .on('tick', function() {
+              g.select('.links').selectAll('line')
+                .attr('x1', function(d) { return d.source.x || 0; })
+                .attr('y1', function(d) { return d.source.y || 0; })
+                .attr('x2', function(d) { return d.target.x || 0; })
+                .attr('y2', function(d) { return d.target.y || 0; });
+              g.select('.nodes').selectAll('g')
+                .attr('transform', function(d) {
+                  var x = typeof d.x === 'number' && Number.isFinite(d.x) ? d.x : 0;
+                  var y = typeof d.y === 'number' && Number.isFinite(d.y) ? d.y : 0;
+                  return 'translate(' + x + ',' + y + ')';
+                });
+            });
+
+          var self = this;
+          var adjacencyMap = new Map();
+          var savedPositions = JSON.parse(localStorage.getItem('graph-viewer-layout-v1') || '{}');
+          var eventSource = null;
+
+          var linksGroup = g.select('.links');
+          if (linksGroup.empty()) linksGroup = g.append('g').attr('class', 'links');
+          var nodesGroup = g.select('.nodes');
+          if (nodesGroup.empty()) nodesGroup = g.append('g').attr('class', 'nodes');
+
+          var link = linksGroup.selectAll('line');
+          var node = nodesGroup.selectAll('g');
+
+          function buildAdjacencyMap(nodes, links) {
+            adjacencyMap.clear();
+            for (var i = 0; i < nodes.length; i++) {
+              adjacencyMap.set(nodes[i].id, new Set());
+            }
+            for (var i = 0; i < links.length; i++) {
+              var sid = typeof links[i].source === 'object' ? links[i].source.id : links[i].source;
+              var tid = typeof links[i].target === 'object' ? links[i].target.id : links[i].target;
+              if (adjacencyMap.has(sid)) adjacencyMap.get(sid).add(tid);
+              if (adjacencyMap.has(tid)) adjacencyMap.get(tid).add(sid);
+            }
+          }
+
+          function applyHighlight(nodeId) {
+            if (!nodeId) {
+              g.select('.nodes').selectAll('g').style('opacity', function(d) {
+                return self.activeFilters.includes(d.group) ? 1 : 0.1;
+              });
+              g.select('.links').selectAll('line').style('opacity', 0.6);
+              return;
+            }
+            var neighbors = adjacencyMap.get(nodeId) || new Set();
+            g.select('.nodes').selectAll('g').style('opacity', function(d) {
+              if (d.id === nodeId || neighbors.has(d.id)) return 1;
+              return self.activeFilters.includes(d.group) ? 0.15 : 0.1;
+            });
+            g.select('.links').selectAll('line').style('opacity', function(d) {
+              var sid = typeof d.source === 'object' ? d.source.id : d.source;
+              var tid = typeof d.target === 'object' ? d.target.id : d.target;
+              return (sid === nodeId || tid === nodeId) ? 0.8 : 0.05;
+            });
+          }
+
+          function applyFilters() {
+            g.select('.nodes').selectAll('g').style('opacity', function(d) {
+              return self.activeFilters.includes(d.group) ? 1 : 0.1;
+            });
+            g.select('.links').selectAll('line').style('opacity', 0.6);
+          }
+
+          function connectSSE() {
+            if (eventSource) {
+              eventSource.close();
+            }
+            eventSource = new EventSource('/api/events');
+            eventSource.onmessage = function(e) {
+              if (e.data === 'heartbeat') return;
+              var msg = JSON.parse(e.data);
+              if (msg.type === 'init' || msg.type === 'update') {
+                var nodes = msg.data.nodes;
+                var links = msg.data.links;
+
+                buildAdjacencyMap(nodes, links);
+
+                for (var i = 0; i < nodes.length; i++) {
+                  var id = nodes[i].id;
+                  var saved = savedPositions[id];
+                  if (saved) {
+                    var x = typeof saved.x === 'number' && Number.isFinite(saved.x) ? saved.x : undefined;
+                    var y = typeof saved.y === 'number' && Number.isFinite(saved.y) ? saved.y : undefined;
+                    var fx = typeof saved.fx === 'number' && Number.isFinite(saved.fx) ? saved.fx : null;
+                    var fy = typeof saved.fy === 'number' && Number.isFinite(saved.fy) ? saved.fy : null;
+                    if (x !== undefined && y !== undefined) {
+                      nodes[i].x = x;
+                      nodes[i].y = y;
+                      nodes[i].fx = fx;
+                      nodes[i].fy = fy;
+                    }
+                  }
+                }
+
+                self.nodeCount = nodes.length;
+                self.linkCount = links.length;
+                console.log('[RENDER] type=' + msg.type + ' nodes=' + nodes.length + ' links=' + links.length);
+
+                var linkSel = g.select('.links').selectAll('line')
+                  .data(links, function(d) { return d.source + '-' + d.target; });
+                linkSel.exit().remove();
+                link = linkSel.enter().append('line').attr('class', 'link').merge(linkSel);
+
+                var nodeSel = g.select('.nodes').selectAll('g')
+                  .data(nodes, function(d) { return d.id; });
+
+                nodeSel.exit().remove();
+
+                var nodeEnter = nodeSel.enter().append('g');
+                nodeEnter.append('circle');
+                nodeEnter.append('text');
+                nodeEnter.on('click', function(event, d) {
+                  event.stopPropagation();
+                  self.selectNode(d);
+                });
+                nodeEnter.on('dblclick', function(event, d) {
+                  d.fx = null;
+                  d.fy = null;
+                  delete savedPositions[d.id];
+                  localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(savedPositions));
+                  simulation.alphaTarget(0.1).restart();
+                  event.stopPropagation();
+                });
+                nodeEnter.on('mouseover', function(event, d) {
+                  applyHighlight(d.id);
+                });
+                nodeEnter.on('mouseout', function() {
+                  applyHighlight(null);
+                });
+                nodeEnter.call(d3.drag()
+                  .on('start', function(event, d) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                  })
+                  .on('drag', function(event, d) {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                  })
+                  .on('end', function(event, d) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    savedPositions[d.id] = { x: d.x, y: d.y, fx: d.fx, fy: d.fy };
+                    localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(savedPositions));
+                  }));
+
+                node = nodeEnter.merge(nodeSel);
+
+                node.select('circle')
+                  .attr('class', 'node')
+                  .attr('r', 8)
+                  .attr('fill', function(d) { return colorMap[d.group] || colorMap.unknown; });
+
+                node.select('text')
+                  .attr('class', 'label')
+                  .attr('dy', 20)
+                  .attr('text-anchor', 'middle')
+                  .text(function(d) { return d.name; });
+
+                applyFilters();
+
+                if (msg.type === 'init') {
+                  simulation.nodes(nodes);
+                  simulation.force('link').links(links);
+                  simulation.alpha(1).restart();
+                }
+
+                if (msg.type === 'update') {
+                  self.updateCount++;
+                  self.lastUpdateText = 'Ultimo cambio: ' + self.formatTime(new Date());
+                }
+              }
+            };
+            eventSource.onerror = function() {
+              self.lastUpdateText = 'Reconectando...';
+              setTimeout(connectSSE, 2000);
+            };
+          }
+
+          connectSSE();
+        },
+
+        selectNode(node) {
+          this.selectedNode = node;
+          this.entityDetail = null;
+          this.loadingDetail = true;
+
+          var self = this;
+          fetch('/api/entity/' + node.id)
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+              self.entityDetail = data;
+              self.loadingDetail = false;
+            })
+            .catch(function() {
+              self.loadingDetail = false;
+            });
+        },
+
+        forceRefresh() {
+          fetch('/api/force-refresh');
+          this.lastUpdateText = 'Refresh forzado enviado...';
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '';
+          var d = new Date(dateStr);
+          return d.toLocaleDateString('es-ES') + ' ' + d.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'});
+        },
+
+        formatTime(date) {
+          return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+      };
+    }
+  </script>
+</body>
+</html>
