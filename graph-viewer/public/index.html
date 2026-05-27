@@ -48,6 +48,12 @@
     </template>
   </div>
 
+  <div x-show="focusedNodeId" x-cloak
+    class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 hover:bg-blue-500 rounded-lg px-4 py-2 text-sm font-medium cursor-pointer z-50"
+    @click="exitFocusMode()">
+    ← Ver grafo completo
+  </div>
+
   <div class="fixed bottom-4 left-4 bg-darkpanel rounded-lg p-3 text-xs border border-gray-700 z-50">
     <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#ff6b6b"></div> critical</div>
     <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#ffd93d"></div> important</div>
@@ -132,6 +138,7 @@
         loadingDetail: false,
         activeFilters: ['critical', 'important', 'normal', 'temporary', 'deprecated', 'unknown'],
         _initialized: false,
+        focusedNodeId: null,
 
         init() {
           if (this._initialized) {
@@ -154,11 +161,30 @@
             .on('zoom', function(e) { g.attr('transform', e.transform); });
           svg.call(zoom);
 
+          svg.on('click', function(event) {
+            if (event.target === svg.node() && self.focusedNodeId) {
+              self.exitFocusMode();
+              applyFilters();
+            }
+          });
+
+          document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && self.focusedNodeId) {
+              self.exitFocusMode();
+              applyFilters();
+            }
+          });
+
+          var linkForce = d3.forceLink()
+            .id(function(d) { return d.id; })
+            .distance(function(d) { return d.source.degree > 10 ? 60 : 30; })
+            .strength(function(d) { return d.source.degree > 10 ? 0.25 : 0.7; });
+
           var simulation = d3.forceSimulation()
-            .force('link', d3.forceLink().id(function(d) { return d.id; }).distance(80))
-            .force('charge', d3.forceManyBody().strength(-200))
+            .force('collide', d3.forceCollide(15))
+            .force('charge', d3.forceManyBody().strength(function(d) { return d.degree > 10 ? -350 : -120; }))
+            .force('link', linkForce)
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30))
             .on('tick', function() {
               g.select('.links').selectAll('line')
                 .attr('x1', function(d) { return d.source.x || 0; })
@@ -178,6 +204,12 @@
           var savedPositions = JSON.parse(localStorage.getItem('graph-viewer-layout-v1') || '{}');
           var eventSource = null;
 
+          var previousNodeIds = new Set();
+          var newNodeIds = new Set();
+          var removingNodeIds = new Set();
+          var pendingUpdate = null;
+          var rafScheduled = false;
+
           var linksGroup = g.select('.links');
           if (linksGroup.empty()) linksGroup = g.append('g').attr('class', 'links');
           var nodesGroup = g.select('.nodes');
@@ -196,6 +228,19 @@
               var tid = typeof links[i].target === 'object' ? links[i].target.id : links[i].target;
               if (adjacencyMap.has(sid)) adjacencyMap.get(sid).add(tid);
               if (adjacencyMap.has(tid)) adjacencyMap.get(tid).add(sid);
+            }
+          }
+
+          function computeDegreeMap(nodes, links) {
+            var degreeMap = new Map();
+            for (var i = 0; i < links.length; i++) {
+              var s = typeof links[i].source === 'object' ? links[i].source.id : links[i].source;
+              var t = typeof links[i].target === 'object' ? links[i].target.id : links[i].target;
+              degreeMap.set(s, (degreeMap.get(s) || 0) + 1);
+              degreeMap.set(t, (degreeMap.get(t) || 0) + 1);
+            }
+            for (var i = 0; i < nodes.length; i++) {
+              nodes[i].degree = degreeMap.get(nodes[i].id) || 0;
             }
           }
 
@@ -221,9 +266,229 @@
 
           function applyFilters() {
             g.select('.nodes').selectAll('g').style('opacity', function(d) {
+              if (self.focusedNodeId) {
+                if (d.id === self.focusedNodeId) return 1;
+                var neighbors = adjacencyMap.get(self.focusedNodeId) || new Set();
+                if (neighbors.has(d.id)) return 0.4;
+                return 0.1;
+              }
               return self.activeFilters.includes(d.group) ? 1 : 0.1;
             });
-            g.select('.links').selectAll('line').style('opacity', 0.6);
+            g.select('.links').selectAll('line').style('opacity', function(d) {
+              if (self.focusedNodeId) {
+                var sid = typeof d.source === 'object' ? d.source.id : d.source;
+                var tid = typeof d.target === 'object' ? d.target.id : d.target;
+                var neighbors = adjacencyMap.get(self.focusedNodeId) || new Set();
+                if (sid === self.focusedNodeId || tid === self.focusedNodeId) return 0.8;
+                if (neighbors.has(sid) && neighbors.has(tid)) return 0.5;
+                return 0.05;
+              }
+              return 0.6;
+            });
+          }
+
+          function applyFocusMode(nodeId) {
+            if (!nodeId) {
+              applyFilters();
+              return;
+            }
+            var focusSet = new Set();
+            focusSet.add(nodeId);
+            var neighbors = adjacencyMap.get(nodeId) || new Set();
+            neighbors.forEach(function(n) { focusSet.add(n); });
+
+            g.select('.nodes').selectAll('g').style('opacity', function(d) {
+              if (focusSet.has(d.id)) return 1;
+              return 0.08;
+            });
+            g.select('.links').selectAll('line').style('opacity', function(d) {
+              var sid = typeof d.source === 'object' ? d.source.id : d.source;
+              var tid = typeof d.target === 'object' ? d.target.id : d.target;
+              if (focusSet.has(sid) && focusSet.has(tid)) return 0.8;
+              return 0.03;
+            });
+          }
+
+          function processUpdate(msg) {
+            if (msg.type !== 'init' && msg.type !== 'update') return;
+
+            var nodes = msg.data.nodes;
+            var links = msg.data.links;
+
+            buildAdjacencyMap(nodes, links);
+            computeDegreeMap(nodes, links);
+
+            for (var i = 0; i < nodes.length; i++) {
+              var id = nodes[i].id;
+              var saved = savedPositions[id];
+              if (saved) {
+                var x = typeof saved.x === 'number' && Number.isFinite(saved.x) ? saved.x : undefined;
+                var y = typeof saved.y === 'number' && Number.isFinite(saved.y) ? saved.y : undefined;
+                var fx = typeof saved.fx === 'number' && Number.isFinite(saved.fx) ? saved.fx : null;
+                var fy = typeof saved.fy === 'number' && Number.isFinite(saved.fy) ? saved.fy : null;
+                if (x !== undefined && y !== undefined) {
+                  nodes[i].x = x;
+                  nodes[i].y = y;
+                  nodes[i].fx = fx;
+                  nodes[i].fy = fy;
+                }
+              }
+            }
+
+            var newIds = new Set(nodes.map(function(n) { return n.id; }));
+            var added = [];
+            var removed = [];
+
+            for (var i = 0; i < nodes.length; i++) {
+              if (!previousNodeIds.has(nodes[i].id)) {
+                added.push(nodes[i]);
+              }
+            }
+            previousNodeIds.forEach(function(id) {
+              if (!newIds.has(id)) {
+                removed.push(id);
+              }
+            });
+            previousNodeIds = newIds;
+
+            self.nodeCount = nodes.length;
+            self.linkCount = links.length;
+            console.log('[RENDER] type=' + msg.type + ' nodes=' + nodes.length + ' links=' + links.length + ' added=' + added.length + ' removed=' + removed.length);
+
+            removed.forEach(function(id) {
+              removingNodeIds.add(id);
+            });
+
+            if (removingNodeIds.size > 0) {
+              var toRemove = Array.from(removingNodeIds);
+              g.select('.nodes').selectAll('g')
+                .filter(function(d) { return removingNodeIds.has(d.id); })
+                .transition()
+                .duration(400)
+                .style('opacity', 0)
+                .attr('transform', function(d) {
+                  var x = typeof d.x === 'number' && Number.isFinite(d.x) ? d.x : 0;
+                  var y = typeof d.y === 'number' && Number.isFinite(d.y) ? d.y : 0;
+                  return 'translate(' + x + ',' + y + ') scale(0)';
+                })
+                .remove();
+              setTimeout(function() {
+                removingNodeIds.clear();
+              }, 450);
+            }
+
+            var linkSel = g.select('.links').selectAll('line')
+              .data(links, function(d) {
+                var s = typeof d.source === 'object' ? d.source.id : d.source;
+                var t = typeof d.target === 'object' ? d.target.id : d.target;
+                return s + '-' + t;
+              });
+            linkSel.exit().transition().duration(300).style('opacity', 0).remove();
+            linkSel = linkSel.enter().append('line').attr('class', 'link').style('opacity', 0).merge(linkSel);
+            if (self.focusedNodeId) {
+              applyFocusMode(self.focusedNodeId);
+            } else {
+              linkSel.transition().duration(300).style('opacity', 0.6);
+            }
+
+            var nodeSel = g.select('.nodes').selectAll('g')
+              .data(nodes, function(d) { return d.id; });
+
+            nodeSel.exit().transition().duration(400)
+              .style('opacity', 0)
+              .attr('transform', function(d) {
+                var x = typeof d.x === 'number' && Number.isFinite(d.x) ? d.x : 0;
+                var y = typeof d.y === 'number' && Number.isFinite(d.y) ? d.y : 0;
+                return 'translate(' + x + ',' + y + ') scale(0)';
+              })
+              .remove();
+
+            var nodeEnter = nodeSel.enter().append('g')
+              .attr('transform', function(d) {
+                var x = typeof d.x === 'number' && Number.isFinite(d.x) ? d.x : 0;
+                var y = typeof d.y === 'number' && Number.isFinite(d.y) ? d.y : 0;
+                return 'translate(' + x + ',' + y + ')';
+              })
+              .style('opacity', 0);
+
+            nodeEnter.append('circle')
+              .attr('r', 0);
+            nodeEnter.append('text')
+              .attr('dy', 20)
+              .attr('text-anchor', 'middle');
+
+            nodeEnter.on('click', function(event, d) {
+              event.stopPropagation();
+              self.enterFocusMode(d.id);
+              self.selectNode(d);
+            });
+            nodeEnter.on('dblclick', function(event, d) {
+              d.fx = null;
+              d.fy = null;
+              delete savedPositions[d.id];
+              localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(savedPositions));
+              simulation.alphaTarget(0.1).restart();
+              event.stopPropagation();
+            });
+            nodeEnter.on('mouseover', function(event, d) {
+              newNodeIds.delete(d.id);
+              applyHighlight(d.id);
+            });
+            nodeEnter.on('mouseout', function() {
+              applyHighlight(null);
+            });
+            nodeEnter.call(d3.drag()
+              .on('start', function(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+              })
+              .on('drag', function(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+              })
+              .on('end', function(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                savedPositions[d.id] = { x: d.x, y: d.y, fx: d.fx, fy: d.fy };
+                localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(savedPositions));
+              }));
+
+            nodeEnter.transition().duration(600)
+              .style('opacity', 1)
+              .select('circle')
+              .attr('r', 8);
+
+            added.forEach(function(n) {
+              newNodeIds.add(n.id);
+            });
+
+            var nodeUpdate = nodeEnter.merge(nodeSel);
+
+            nodeUpdate.select('circle')
+              .attr('class', 'node')
+              .attr('r', 8)
+              .attr('fill', function(d) {
+                if (newNodeIds.has(d.id)) {
+                  return '#fff';
+                }
+                return colorMap[d.group] || colorMap.unknown;
+              });
+
+            nodeUpdate.select('text')
+              .attr('class', 'label')
+              .text(function(d) { return d.name; });
+
+            applyFilters();
+
+            if (msg.type === 'init') {
+              simulation.nodes(nodes);
+              simulation.force('link').links(links);
+              simulation.alpha(1).restart();
+            } else {
+              simulation.nodes(nodes);
+              simulation.force('link').links(links);
+              simulation.alpha(0.3).restart();
+            }
           }
 
           function connectSSE() {
@@ -233,106 +498,14 @@
             eventSource = new EventSource('/api/events');
             eventSource.onmessage = function(e) {
               if (e.data === 'heartbeat') return;
-              var msg = JSON.parse(e.data);
-              if (msg.type === 'init' || msg.type === 'update') {
-                var nodes = msg.data.nodes;
-                var links = msg.data.links;
+              pendingUpdate = JSON.parse(e.data);
 
-                buildAdjacencyMap(nodes, links);
-
-                for (var i = 0; i < nodes.length; i++) {
-                  var id = nodes[i].id;
-                  var saved = savedPositions[id];
-                  if (saved) {
-                    var x = typeof saved.x === 'number' && Number.isFinite(saved.x) ? saved.x : undefined;
-                    var y = typeof saved.y === 'number' && Number.isFinite(saved.y) ? saved.y : undefined;
-                    var fx = typeof saved.fx === 'number' && Number.isFinite(saved.fx) ? saved.fx : null;
-                    var fy = typeof saved.fy === 'number' && Number.isFinite(saved.fy) ? saved.fy : null;
-                    if (x !== undefined && y !== undefined) {
-                      nodes[i].x = x;
-                      nodes[i].y = y;
-                      nodes[i].fx = fx;
-                      nodes[i].fy = fy;
-                    }
-                  }
-                }
-
-                self.nodeCount = nodes.length;
-                self.linkCount = links.length;
-                console.log('[RENDER] type=' + msg.type + ' nodes=' + nodes.length + ' links=' + links.length);
-
-                var linkSel = g.select('.links').selectAll('line')
-                  .data(links, function(d) { return d.source + '-' + d.target; });
-                linkSel.exit().remove();
-                link = linkSel.enter().append('line').attr('class', 'link').merge(linkSel);
-
-                var nodeSel = g.select('.nodes').selectAll('g')
-                  .data(nodes, function(d) { return d.id; });
-
-                nodeSel.exit().remove();
-
-                var nodeEnter = nodeSel.enter().append('g');
-                nodeEnter.append('circle');
-                nodeEnter.append('text');
-                nodeEnter.on('click', function(event, d) {
-                  event.stopPropagation();
-                  self.selectNode(d);
+              if (!rafScheduled) {
+                rafScheduled = true;
+                requestAnimationFrame(function() {
+                  processUpdate(pendingUpdate);
+                  rafScheduled = false;
                 });
-                nodeEnter.on('dblclick', function(event, d) {
-                  d.fx = null;
-                  d.fy = null;
-                  delete savedPositions[d.id];
-                  localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(savedPositions));
-                  simulation.alphaTarget(0.1).restart();
-                  event.stopPropagation();
-                });
-                nodeEnter.on('mouseover', function(event, d) {
-                  applyHighlight(d.id);
-                });
-                nodeEnter.on('mouseout', function() {
-                  applyHighlight(null);
-                });
-                nodeEnter.call(d3.drag()
-                  .on('start', function(event, d) {
-                    if (!event.active) simulation.alphaTarget(0.3).restart();
-                    d.fx = d.x;
-                    d.fy = d.y;
-                  })
-                  .on('drag', function(event, d) {
-                    d.fx = event.x;
-                    d.fy = event.y;
-                  })
-                  .on('end', function(event, d) {
-                    if (!event.active) simulation.alphaTarget(0);
-                    savedPositions[d.id] = { x: d.x, y: d.y, fx: d.fx, fy: d.fy };
-                    localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(savedPositions));
-                  }));
-
-                node = nodeEnter.merge(nodeSel);
-
-                node.select('circle')
-                  .attr('class', 'node')
-                  .attr('r', 8)
-                  .attr('fill', function(d) { return colorMap[d.group] || colorMap.unknown; });
-
-                node.select('text')
-                  .attr('class', 'label')
-                  .attr('dy', 20)
-                  .attr('text-anchor', 'middle')
-                  .text(function(d) { return d.name; });
-
-                applyFilters();
-
-                if (msg.type === 'init') {
-                  simulation.nodes(nodes);
-                  simulation.force('link').links(links);
-                  simulation.alpha(1).restart();
-                }
-
-                if (msg.type === 'update') {
-                  self.updateCount++;
-                  self.lastUpdateText = 'Ultimo cambio: ' + self.formatTime(new Date());
-                }
               }
             };
             eventSource.onerror = function() {
@@ -364,6 +537,16 @@
         forceRefresh() {
           fetch('/api/force-refresh');
           this.lastUpdateText = 'Refresh forzado enviado...';
+        },
+
+        enterFocusMode(nodeId) {
+          this.focusedNodeId = nodeId;
+          applyFocusMode(nodeId);
+        },
+
+        exitFocusMode() {
+          this.focusedNodeId = null;
+          applyFilters();
         },
 
         formatDate(dateStr) {

@@ -1,0 +1,13 @@
+services:
+  memory:
+    image: gnr092/memoryproxy
+    container_name: memory
+    volumes:
+      - ./memorydata:/data
+    restart: unless-stopped
+    networks:
+      - laravel-shared-network
+
+networks:
+  laravel-shared-network:
+    external: true
