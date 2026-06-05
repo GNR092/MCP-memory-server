@@ -21,19 +21,41 @@
   </script>
   <style>
     [x-cloak] { display: none !important; }
-    .node { stroke: #fff; stroke-width: 1.5px; cursor: pointer; }
+    .node { stroke: #fff; stroke-width: 1.5px; cursor: pointer; fill: #fff; }
     .node:hover { stroke-width: 3px; }
     .link { stroke: #4a4a6a; stroke-opacity: 0.6; }
     .label { fill: #ccc; font-size: 10px; pointer-events: none; }
+    .node-new circle {
+      animation: newNodePulse 1.5s ease-out forwards;
+    }
+    @keyframes newNodePulse {
+      0% {
+        stroke-width: 5px;
+        filter: drop-shadow(0 0 3px #22c55e);
+      }
+      70% {
+        stroke-width: 3px;
+        filter: drop-shadow(0 0 2px #22c55e);
+      }
+      100% {
+        stroke-width: 1.5px;
+        filter: drop-shadow(0 0 0 transparent);
+      }
+    }
+    .node-removing circle {
+      stroke: #ef4444 !important;
+      stroke-width: 3px !important;
+      opacity: 1;
+    }
   </style>
 </head>
 <body class="bg-dark text-gray-200 overflow-hidden" x-data="graphApp()">
 
   <div class="fixed top-4 left-4 bg-darkpanel rounded-lg p-3 text-sm border border-gray-700 flex items-center gap-4 z-50">
-    <span>Nodos: <span class="text-blue-400" x-text="nodeCount">0</span></span>
-    <span>Enlaces: <span class="text-blue-400" x-text="linkCount">0</span></span>
-    <span>Updates: <span class="text-blue-400" x-text="updateCount">0</span></span>
-    <span class="text-gray-500 text-xs" x-text="lastUpdateText">Sin cambios detectados</span>
+    <span>Nodos: <span class="text-blue-400" x-text="$store.graphStore.nodeCount">0</span></span>
+    <span>Enlaces: <span class="text-blue-400" x-text="$store.graphStore.linkCount">0</span></span>
+    <span>Updates: <span class="text-blue-400" x-text="$store.graphStore.updateCount">0</span></span>
+    <span class="text-gray-500 text-xs" x-text="$store.graphStore.lastUpdateText">Sin cambios detectados</span>
     <button @click="forceRefresh()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs">Actualizar ahora</button>
   </div>
 
@@ -41,94 +63,162 @@
     <h4 class="text-gray-400 uppercase mb-2">Filtros</h4>
     <template x-for="type in ['critical', 'important', 'normal', 'temporary', 'deprecated', 'unknown']" :key="type">
       <label class="flex items-center gap-2 mb-1 cursor-pointer">
-        <input type="checkbox" x-model="activeFilters" :value="type" class="rounded bg-gray-700 border-gray-600">
+        <input type="checkbox" x-model="$store.graphStore.activeFilters" :value="type" class="rounded bg-gray-700 border-gray-600">
         <div class="w-3 h-3 rounded-full" :style="{ background: colorMap[type] }"></div>
         <span class="capitalize" x-text="type"></span>
       </label>
     </template>
   </div>
 
-  <div x-show="focusedNodeId" x-cloak
+  <div x-show="$store.graphStore.focusedNodeId" x-cloak
     class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 hover:bg-blue-500 rounded-lg px-4 py-2 text-sm font-medium cursor-pointer z-50"
-    @click="exitFocusMode()">
-    ← Ver grafo completo
+    @click="resetLayout()">
+    ↺ Reacomodar
   </div>
 
   <div class="fixed bottom-4 left-4 bg-darkpanel rounded-lg p-3 text-xs border border-gray-700 z-50">
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#ff6b6b"></div> critical</div>
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#ffd93d"></div> important</div>
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#6bcb77"></div> normal</div>
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#4d96ff"></div> temporary</div>
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#9d4edd"></div> deprecated</div>
-    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full border-2 border-white" style="background:#aaa"></div> unknown</div>
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#ff6b6b"></div> critical</div>
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#ffd93d"></div> important</div>
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#6bcb77"></div> normal</div>
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#4d96ff"></div> temporary</div>
+    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#9d4edd"></div> deprecated</div>
+    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#aaa"></div> unknown</div>
   </div>
 
-  <div x-show="selectedNode" x-cloak
-    class="fixed top-20 right-4 w-80 max-h-[calc(100vh-120px)] bg-darkpanel rounded-lg border border-gray-700 overflow-hidden flex flex-col z-50">
+  <div x-show="$store.graphStore.selectedNode !== null" x-cloak
+    class="fixed top-20 right-4 w-96 max-h-[calc(100vh-120px)] bg-darkpanel rounded-lg border border-gray-700 overflow-hidden flex flex-col z-50">
     <div class="px-4 py-3 bg-gray-800/90 border-b border-gray-700 flex justify-between items-center">
-      <h3 class="text-sm font-medium text-blue-400" x-text="selectedNode?.name">-</h3>
-      <button @click="selectedNode = null" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
+      <h3 class="text-sm font-medium text-blue-400 truncate" x-text="$store.graphStore.selectedNode?.name">-</h3>
+      <button @click="$store.graphStore.selectedNode = null" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
     </div>
-    <div class="p-4 overflow-y-auto flex-1">
-      <p class="text-xs text-gray-500 mb-4 capitalize" x-text="selectedNode?.group">-</p>
 
-      <template x-if="loadingDetail">
-        <p class="text-gray-500 text-xs text-center py-4">Cargando...</p>
-      </template>
+    <template x-if="$store.graphStore.loadingDetail">
+      <div class="p-4 text-center">
+        <p class="text-gray-500 text-sm">Cargando...</p>
+      </div>
+    </template>
 
-      <template x-if="!loadingDetail && entityDetail">
-        <div>
-          <h4 class="text-xs text-gray-600 uppercase mb-2">Observaciones</h4>
-          <template x-if="entityDetail.observations.length === 0">
-            <p class="text-gray-600 text-xs italic mb-4">Sin observaciones</p>
-          </template>
-          <template x-for="obs in entityDetail.observations" :key="obs.id">
-            <div class="bg-white/5 rounded p-2 mb-2 text-xs">
-              <p class="text-gray-300 leading-relaxed" x-text="obs.content"></p>
-              <p class="text-gray-600 text-xs mt-1" x-text="'Creado: ' + formatDate(obs.created_at) + ' | ' + obs.importance"></p>
-            </div>
-          </template>
+    <template x-if="!$store.graphStore.loadingDetail && $store.graphStore.entityDetail">
+      <div class="p-4 overflow-y-auto flex-1">
+        <!-- Node Info Header -->
+        <div class="mb-4 pb-3 border-b border-gray-700">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xs text-gray-500">ID:</span>
+            <span class="text-xs text-gray-300 font-mono" x-text="$store.graphStore.entityDetail.entity.id"></span>
+          </div>
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xs text-gray-500">Tipo:</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-200 capitalize" x-text="$store.graphStore.entityDetail.entity.entityType"></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-500">Grupo:</span>
+            <span class="text-xs px-2 py-0.5 rounded capitalize" :class="getImportanceClass($store.graphStore.selectedNode?.group)" x-text="$store.graphStore.selectedNode?.group || 'unknown'"></span>
+          </div>
+        </div>
 
-          <h4 class="text-xs text-gray-600 uppercase mb-2 mt-4">Relaciones salientes</h4>
-          <template x-if="entityDetail.outgoing.length === 0">
-            <p class="text-gray-600 text-xs italic mb-4">Sin relaciones</p>
+        <!-- Observations -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-xs text-gray-600 uppercase">Observaciones</h4>
+            <span class="text-xs text-gray-500" x-text="$store.graphStore.entityDetail.observations.length + ' total'"></span>
+          </div>
+          <template x-if="$store.graphStore.entityDetail.observations.length === 0">
+            <p class="text-gray-600 text-xs italic">Sin observaciones</p>
           </template>
-          <template x-for="rel in entityDetail.outgoing" :key="rel.id">
-            <div class="bg-white/5 rounded p-2 mb-1 text-xs flex justify-between">
-              <span class="text-blue-400" x-text="rel.relationType"></span>
-              <span class="text-gray-400" x-text="rel.to_name"></span>
-            </div>
-          </template>
+          <div class="max-h-60 overflow-y-auto space-y-2 pr-1">
+            <template x-for="obs in $store.graphStore.entityDetail.observations" :key="obs.id">
+              <div class="bg-white/5 rounded p-2 text-xs">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="px-1.5 py-0.5 rounded text-[10px] uppercase" :class="getImportanceClass(obs.importance)" x-text="obs.importance"></span>
+                  <span class="text-gray-600 text-[10px]" x-text="formatDate(obs.created_at)"></span>
+                </div>
+                <p class="text-gray-300 leading-relaxed" x-text="obs.content"></p>
+              </div>
+            </template>
+          </div>
+        </div>
 
-          <h4 class="text-xs text-gray-600 uppercase mb-2 mt-4">Relaciones entrantes</h4>
-          <template x-if="entityDetail.incoming.length === 0">
+        <!-- Outgoing Relations -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-xs text-gray-600 uppercase">Relaciones salientes</h4>
+            <span class="text-xs text-blue-400" x-text="$store.graphStore.entityDetail.outgoing.length + ' →'"></span>
+          </div>
+          <template x-if="$store.graphStore.entityDetail.outgoing.length === 0">
             <p class="text-gray-600 text-xs italic">Sin relaciones</p>
           </template>
-          <template x-for="rel in entityDetail.incoming" :key="rel.id">
-            <div class="bg-white/5 rounded p-2 mb-1 text-xs flex justify-between">
-              <span class="text-gray-400" x-text="rel.from_name"></span>
-              <span class="text-blue-400" x-text="rel.relationType"></span>
-            </div>
-          </template>
+          <div class="max-h-40 overflow-y-auto space-y-1 pr-1">
+            <template x-for="rel in $store.graphStore.entityDetail.outgoing" :key="rel.id">
+              <div class="bg-white/5 rounded p-2 text-xs flex items-center gap-2">
+                <span class="text-[10px] text-gray-600 font-mono" x-text="'#' + rel.id"></span>
+                <span class="px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300 text-[10px] truncate" x-text="rel.relationType"></span>
+                <span class="text-gray-300 truncate flex-1" x-text="rel.to_name"></span>
+              </div>
+            </template>
+          </div>
         </div>
-      </template>
-    </div>
+
+        <!-- Incoming Relations -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-xs text-gray-600 uppercase">Relaciones entrantes</h4>
+            <span class="text-xs text-green-400" x-text="$store.graphStore.entityDetail.incoming.length + ' ←'"></span>
+          </div>
+          <template x-if="$store.graphStore.entityDetail.incoming.length === 0">
+            <p class="text-gray-600 text-xs italic">Sin relaciones</p>
+          </template>
+          <div class="max-h-40 overflow-y-auto space-y-1 pr-1">
+            <template x-for="rel in $store.graphStore.entityDetail.incoming" :key="rel.id">
+              <div class="bg-white/5 rounded p-2 text-xs flex items-center gap-2">
+                <span class="text-[10px] text-gray-600 font-mono" x-text="'#' + rel.id"></span>
+                <span class="text-gray-300 truncate flex-1 text-right" x-text="rel.from_name"></span>
+                <span class="px-1.5 py-0.5 rounded bg-green-900/50 text-green-300 text-[10px] truncate" x-text="rel.relationType"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 
   <svg id="graph" class="w-screen h-screen"></svg>
 
   <script>
+    function getNodeColor(group) {
+      if (!group || typeof group !== 'string') return '#9ca3af';
+      if (colorMap[group]) return colorMap[group];
+      var hash = 0;
+      for (var i = 0; i < group.length; i++) {
+        hash = group.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      var hue = Math.abs(hash % 360);
+      return 'hsl(' + hue + ', 70%, 50%)';
+    }
+
     var colorMap = {
       critical: '#ff6b6b',
       important: '#ffd93d',
       normal: '#6bcb77',
       temporary: '#4d96ff',
       deprecated: '#9d4edd',
-      unknown: '#aaa'
+      unknown: '#9ca3af'
     };
 
-    function graphApp() {
-      return {
+    function getImportanceClass(level) {
+      var map = {
+        critical: 'bg-red-900/50 text-red-300 border border-red-700',
+        important: 'bg-yellow-900/50 text-yellow-300 border border-yellow-700',
+        normal: 'bg-green-900/50 text-green-300 border border-green-700',
+        temporary: 'bg-blue-900/50 text-blue-300 border border-blue-700',
+        deprecated: 'bg-purple-900/50 text-purple-300 border border-purple-700',
+        unknown: 'bg-gray-700/50 text-gray-300 border border-gray-600'
+      };
+      return map[level] || map.unknown;
+    }
+
+    // Initialize Alpine store BEFORE graphApp
+    document.addEventListener('alpine:init', function() {
+      Alpine.store('graphStore', {
         nodeCount: 0,
         linkCount: 0,
         updateCount: 0,
@@ -138,60 +228,57 @@
         loadingDetail: false,
         activeFilters: ['critical', 'important', 'normal', 'temporary', 'deprecated', 'unknown'],
         _initialized: false,
-        focusedNodeId: null,
+        focusedNodeId: null
+      });
+    });
 
-        init() {
-          if (this._initialized) {
+    function graphApp() {
+      var app = {
+        init: function() {
+          if (Alpine.store('graphStore')._initialized) {
             console.warn('[INIT] Already initialized, skipping');
             return;
           }
-          this._initialized = true;
+          Alpine.store('graphStore')._initialized = true;
           console.log('[INIT] Starting initialization');
+
           var width = window.innerWidth;
           var height = window.innerHeight;
+          var svg = d3.select('#graph').attr('width', width).attr('height', height);
 
-          var svg = d3.select('#graph')
-            .attr('width', width)
-            .attr('height', height);
+          app.g = svg.append('g');
 
-          var g = svg.append('g');
-
-          var zoom = d3.zoom()
-            .scaleExtent([0.1, 10])
-            .on('zoom', function(e) { g.attr('transform', e.transform); });
+          var zoom = d3.zoom().scaleExtent([0.1, 10]).on('zoom', function(e) { app.g.attr('transform', e.transform); });
           svg.call(zoom);
 
           svg.on('click', function(event) {
-            if (event.target === svg.node() && self.focusedNodeId) {
-              self.exitFocusMode();
-              applyFilters();
+            if (event.target === svg.node() && Alpine.store('graphStore').focusedNodeId) {
+              app.resetLayout();
             }
           });
 
           document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && self.focusedNodeId) {
-              self.exitFocusMode();
-              applyFilters();
+            if (e.key === 'Escape' && Alpine.store('graphStore').focusedNodeId) {
+              app.resetLayout();
             }
           });
 
-          var linkForce = d3.forceLink()
-            .id(function(d) { return d.id; })
+          var linkForce = d3.forceLink().id(function(d) { return d.id; })
             .distance(function(d) { return d.source.degree > 10 ? 60 : 30; })
             .strength(function(d) { return d.source.degree > 10 ? 0.25 : 0.7; });
 
-          var simulation = d3.forceSimulation()
+          app.simulation = d3.forceSimulation()
             .force('collide', d3.forceCollide(15))
             .force('charge', d3.forceManyBody().strength(function(d) { return d.degree > 10 ? -350 : -120; }))
             .force('link', linkForce)
             .force('center', d3.forceCenter(width / 2, height / 2))
             .on('tick', function() {
-              g.select('.links').selectAll('line')
+              app.g.select('.links').selectAll('line')
                 .attr('x1', function(d) { return d.source.x || 0; })
                 .attr('y1', function(d) { return d.source.y || 0; })
                 .attr('x2', function(d) { return d.target.x || 0; })
                 .attr('y2', function(d) { return d.target.y || 0; });
-              g.select('.nodes').selectAll('g')
+              app.g.select('.nodes').selectAll('g')
                 .attr('transform', function(d) {
                   var x = typeof d.x === 'number' && Number.isFinite(d.x) ? d.x : 0;
                   var y = typeof d.y === 'number' && Number.isFinite(d.y) ? d.y : 0;
@@ -199,366 +286,443 @@
                 });
             });
 
-          var self = this;
-          var adjacencyMap = new Map();
-          var savedPositions = JSON.parse(localStorage.getItem('graph-viewer-layout-v1') || '{}');
-          var eventSource = null;
+          app.adjacencyMap = new Map();
+          app.savedPositions = JSON.parse(localStorage.getItem('graph-viewer-layout-v1') || '{}');
+          app.eventSource = null;
+          app.previousNodeIds = new Set();
+          app.logicalNodes = [];
+          app.renderNodes = [];
+          app.nodeVisualState = new Map();
+          app.nodeRefs = new Map();
+          app.removedNodeCache = new Map();
+          app.newNodeTimers = new Map();
+          app.removalTimers = new Map();
+          app.pendingUpdate = null;
+          app.rafScheduled = false;
 
-          var previousNodeIds = new Set();
-          var newNodeIds = new Set();
-          var removingNodeIds = new Set();
-          var pendingUpdate = null;
-          var rafScheduled = false;
+          app.linksGroup = app.g.select('.links');
+          if (app.linksGroup.empty()) app.linksGroup = app.g.append('g').attr('class', 'links');
+          app.nodesGroup = app.g.select('.nodes');
+          if (app.nodesGroup.empty()) app.nodesGroup = app.g.append('g').attr('class', 'nodes');
 
-          var linksGroup = g.select('.links');
-          if (linksGroup.empty()) linksGroup = g.append('g').attr('class', 'links');
-          var nodesGroup = g.select('.nodes');
-          if (nodesGroup.empty()) nodesGroup = g.append('g').attr('class', 'nodes');
-
-          var link = linksGroup.selectAll('line');
-          var node = nodesGroup.selectAll('g');
-
-          function buildAdjacencyMap(nodes, links) {
-            adjacencyMap.clear();
-            for (var i = 0; i < nodes.length; i++) {
-              adjacencyMap.set(nodes[i].id, new Set());
-            }
-            for (var i = 0; i < links.length; i++) {
-              var sid = typeof links[i].source === 'object' ? links[i].source.id : links[i].source;
-              var tid = typeof links[i].target === 'object' ? links[i].target.id : links[i].target;
-              if (adjacencyMap.has(sid)) adjacencyMap.get(sid).add(tid);
-              if (adjacencyMap.has(tid)) adjacencyMap.get(tid).add(sid);
-            }
-          }
-
-          function computeDegreeMap(nodes, links) {
-            var degreeMap = new Map();
-            for (var i = 0; i < links.length; i++) {
-              var s = typeof links[i].source === 'object' ? links[i].source.id : links[i].source;
-              var t = typeof links[i].target === 'object' ? links[i].target.id : links[i].target;
-              degreeMap.set(s, (degreeMap.get(s) || 0) + 1);
-              degreeMap.set(t, (degreeMap.get(t) || 0) + 1);
-            }
-            for (var i = 0; i < nodes.length; i++) {
-              nodes[i].degree = degreeMap.get(nodes[i].id) || 0;
-            }
-          }
-
-          function applyHighlight(nodeId) {
-            if (!nodeId) {
-              g.select('.nodes').selectAll('g').style('opacity', function(d) {
-                return self.activeFilters.includes(d.group) ? 1 : 0.1;
-              });
-              g.select('.links').selectAll('line').style('opacity', 0.6);
-              return;
-            }
-            var neighbors = adjacencyMap.get(nodeId) || new Set();
-            g.select('.nodes').selectAll('g').style('opacity', function(d) {
-              if (d.id === nodeId || neighbors.has(d.id)) return 1;
-              return self.activeFilters.includes(d.group) ? 0.15 : 0.1;
-            });
-            g.select('.links').selectAll('line').style('opacity', function(d) {
-              var sid = typeof d.source === 'object' ? d.source.id : d.source;
-              var tid = typeof d.target === 'object' ? d.target.id : d.target;
-              return (sid === nodeId || tid === nodeId) ? 0.8 : 0.05;
-            });
-          }
-
-          function applyFilters() {
-            g.select('.nodes').selectAll('g').style('opacity', function(d) {
-              if (self.focusedNodeId) {
-                if (d.id === self.focusedNodeId) return 1;
-                var neighbors = adjacencyMap.get(self.focusedNodeId) || new Set();
-                if (neighbors.has(d.id)) return 0.4;
-                return 0.1;
-              }
-              return self.activeFilters.includes(d.group) ? 1 : 0.1;
-            });
-            g.select('.links').selectAll('line').style('opacity', function(d) {
-              if (self.focusedNodeId) {
-                var sid = typeof d.source === 'object' ? d.source.id : d.source;
-                var tid = typeof d.target === 'object' ? d.target.id : d.target;
-                var neighbors = adjacencyMap.get(self.focusedNodeId) || new Set();
-                if (sid === self.focusedNodeId || tid === self.focusedNodeId) return 0.8;
-                if (neighbors.has(sid) && neighbors.has(tid)) return 0.5;
-                return 0.05;
-              }
-              return 0.6;
-            });
-          }
-
-          function applyFocusMode(nodeId) {
-            if (!nodeId) {
-              applyFilters();
-              return;
-            }
-            var focusSet = new Set();
-            focusSet.add(nodeId);
-            var neighbors = adjacencyMap.get(nodeId) || new Set();
-            neighbors.forEach(function(n) { focusSet.add(n); });
-
-            g.select('.nodes').selectAll('g').style('opacity', function(d) {
-              if (focusSet.has(d.id)) return 1;
-              return 0.08;
-            });
-            g.select('.links').selectAll('line').style('opacity', function(d) {
-              var sid = typeof d.source === 'object' ? d.source.id : d.source;
-              var tid = typeof d.target === 'object' ? d.target.id : d.target;
-              if (focusSet.has(sid) && focusSet.has(tid)) return 0.8;
-              return 0.03;
-            });
-          }
-
-          function processUpdate(msg) {
-            if (msg.type !== 'init' && msg.type !== 'update') return;
-
-            var nodes = msg.data.nodes;
-            var links = msg.data.links;
-
-            buildAdjacencyMap(nodes, links);
-            computeDegreeMap(nodes, links);
-
-            for (var i = 0; i < nodes.length; i++) {
-              var id = nodes[i].id;
-              var saved = savedPositions[id];
-              if (saved) {
-                var x = typeof saved.x === 'number' && Number.isFinite(saved.x) ? saved.x : undefined;
-                var y = typeof saved.y === 'number' && Number.isFinite(saved.y) ? saved.y : undefined;
-                var fx = typeof saved.fx === 'number' && Number.isFinite(saved.fx) ? saved.fx : null;
-                var fy = typeof saved.fy === 'number' && Number.isFinite(saved.fy) ? saved.fy : null;
-                if (x !== undefined && y !== undefined) {
-                  nodes[i].x = x;
-                  nodes[i].y = y;
-                  nodes[i].fx = fx;
-                  nodes[i].fy = fy;
-                }
-              }
-            }
-
-            var newIds = new Set(nodes.map(function(n) { return n.id; }));
-            var added = [];
-            var removed = [];
-
-            for (var i = 0; i < nodes.length; i++) {
-              if (!previousNodeIds.has(nodes[i].id)) {
-                added.push(nodes[i]);
-              }
-            }
-            previousNodeIds.forEach(function(id) {
-              if (!newIds.has(id)) {
-                removed.push(id);
-              }
-            });
-            previousNodeIds = newIds;
-
-            self.nodeCount = nodes.length;
-            self.linkCount = links.length;
-            console.log('[RENDER] type=' + msg.type + ' nodes=' + nodes.length + ' links=' + links.length + ' added=' + added.length + ' removed=' + removed.length);
-
-            removed.forEach(function(id) {
-              removingNodeIds.add(id);
-            });
-
-            if (removingNodeIds.size > 0) {
-              var toRemove = Array.from(removingNodeIds);
-              g.select('.nodes').selectAll('g')
-                .filter(function(d) { return removingNodeIds.has(d.id); })
-                .transition()
-                .duration(400)
-                .style('opacity', 0)
-                .attr('transform', function(d) {
-                  var x = typeof d.x === 'number' && Number.isFinite(d.x) ? d.x : 0;
-                  var y = typeof d.y === 'number' && Number.isFinite(d.y) ? d.y : 0;
-                  return 'translate(' + x + ',' + y + ') scale(0)';
-                })
-                .remove();
-              setTimeout(function() {
-                removingNodeIds.clear();
-              }, 450);
-            }
-
-            var linkSel = g.select('.links').selectAll('line')
-              .data(links, function(d) {
-                var s = typeof d.source === 'object' ? d.source.id : d.source;
-                var t = typeof d.target === 'object' ? d.target.id : d.target;
-                return s + '-' + t;
-              });
-            linkSel.exit().transition().duration(300).style('opacity', 0).remove();
-            linkSel = linkSel.enter().append('line').attr('class', 'link').style('opacity', 0).merge(linkSel);
-            if (self.focusedNodeId) {
-              applyFocusMode(self.focusedNodeId);
-            } else {
-              linkSel.transition().duration(300).style('opacity', 0.6);
-            }
-
-            var nodeSel = g.select('.nodes').selectAll('g')
-              .data(nodes, function(d) { return d.id; });
-
-            nodeSel.exit().transition().duration(400)
-              .style('opacity', 0)
-              .attr('transform', function(d) {
-                var x = typeof d.x === 'number' && Number.isFinite(d.x) ? d.x : 0;
-                var y = typeof d.y === 'number' && Number.isFinite(d.y) ? d.y : 0;
-                return 'translate(' + x + ',' + y + ') scale(0)';
-              })
-              .remove();
-
-            var nodeEnter = nodeSel.enter().append('g')
-              .attr('transform', function(d) {
-                var x = typeof d.x === 'number' && Number.isFinite(d.x) ? d.x : 0;
-                var y = typeof d.y === 'number' && Number.isFinite(d.y) ? d.y : 0;
-                return 'translate(' + x + ',' + y + ')';
-              })
-              .style('opacity', 0);
-
-            nodeEnter.append('circle')
-              .attr('r', 0);
-            nodeEnter.append('text')
-              .attr('dy', 20)
-              .attr('text-anchor', 'middle');
-
-            nodeEnter.on('click', function(event, d) {
-              event.stopPropagation();
-              self.enterFocusMode(d.id);
-              self.selectNode(d);
-            });
-            nodeEnter.on('dblclick', function(event, d) {
-              d.fx = null;
-              d.fy = null;
-              delete savedPositions[d.id];
-              localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(savedPositions));
-              simulation.alphaTarget(0.1).restart();
-              event.stopPropagation();
-            });
-            nodeEnter.on('mouseover', function(event, d) {
-              newNodeIds.delete(d.id);
-              applyHighlight(d.id);
-            });
-            nodeEnter.on('mouseout', function() {
-              applyHighlight(null);
-            });
-            nodeEnter.call(d3.drag()
-              .on('start', function(event, d) {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-              })
-              .on('drag', function(event, d) {
-                d.fx = event.x;
-                d.fy = event.y;
-              })
-              .on('end', function(event, d) {
-                if (!event.active) simulation.alphaTarget(0);
-                savedPositions[d.id] = { x: d.x, y: d.y, fx: d.fx, fy: d.fy };
-                localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(savedPositions));
-              }));
-
-            nodeEnter.transition().duration(600)
-              .style('opacity', 1)
-              .select('circle')
-              .attr('r', 8);
-
-            added.forEach(function(n) {
-              newNodeIds.add(n.id);
-            });
-
-            var nodeUpdate = nodeEnter.merge(nodeSel);
-
-            nodeUpdate.select('circle')
-              .attr('class', 'node')
-              .attr('r', 8)
-              .attr('fill', function(d) {
-                if (newNodeIds.has(d.id)) {
-                  return '#fff';
-                }
-                return colorMap[d.group] || colorMap.unknown;
-              });
-
-            nodeUpdate.select('text')
-              .attr('class', 'label')
-              .text(function(d) { return d.name; });
-
-            applyFilters();
-
-            if (msg.type === 'init') {
-              simulation.nodes(nodes);
-              simulation.force('link').links(links);
-              simulation.alpha(1).restart();
-            } else {
-              simulation.nodes(nodes);
-              simulation.force('link').links(links);
-              simulation.alpha(0.3).restart();
-            }
-          }
-
-          function connectSSE() {
-            if (eventSource) {
-              eventSource.close();
-            }
-            eventSource = new EventSource('/api/events');
-            eventSource.onmessage = function(e) {
-              if (e.data === 'heartbeat') return;
-              pendingUpdate = JSON.parse(e.data);
-
-              if (!rafScheduled) {
-                rafScheduled = true;
-                requestAnimationFrame(function() {
-                  processUpdate(pendingUpdate);
-                  rafScheduled = false;
-                });
-              }
-            };
-            eventSource.onerror = function() {
-              self.lastUpdateText = 'Reconectando...';
-              setTimeout(connectSSE, 2000);
-            };
-          }
-
-          connectSSE();
+          app.connectSSE();
         },
 
-        selectNode(node) {
-          this.selectedNode = node;
-          this.entityDetail = null;
-          this.loadingDetail = true;
+        selectNode: function(node) {
+          console.log('[selectNode] called with node.id:', node && node.id);
+          Alpine.store('graphStore').selectedNode = node;
+          Alpine.store('graphStore').entityDetail = null;
+          Alpine.store('graphStore').loadingDetail = true;
+          console.log('[selectNode] selectedNode set');
 
           var self = this;
           fetch('/api/entity/' + node.id)
             .then(function(res) { return res.json(); })
             .then(function(data) {
-              self.entityDetail = data;
-              self.loadingDetail = false;
+              console.log('[selectNode] got data');
+              Alpine.store('graphStore').entityDetail = data;
+              Alpine.store('graphStore').loadingDetail = false;
             })
-            .catch(function() {
-              self.loadingDetail = false;
+            .catch(function(err) {
+              console.log('[selectNode] error:', err);
+              Alpine.store('graphStore').loadingDetail = false;
             });
         },
 
-        forceRefresh() {
+        forceRefresh: function() {
           fetch('/api/force-refresh');
-          this.lastUpdateText = 'Refresh forzado enviado...';
+          Alpine.store('graphStore').lastUpdateText = 'Refresh forzado enviado...';
         },
 
-        enterFocusMode(nodeId) {
-          this.focusedNodeId = nodeId;
-          applyFocusMode(nodeId);
+        enterFocusMode: function(nodeId) {
+          Alpine.store('graphStore').focusedNodeId = nodeId;
+          if (!nodeId) {
+            this.applyFilters();
+            return;
+          }
+          var focusSet = new Set();
+          focusSet.add(nodeId);
+          var neighbors = app.adjacencyMap.get(nodeId) || new Set();
+          neighbors.forEach(function(n) { focusSet.add(n); });
+          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
+            if (focusSet.has(d.id)) return 1;
+            return 0.08;
+          });
+          app.g.select('.links').selectAll('line').style('opacity', function(d) {
+            var sid = typeof d.source === 'object' ? d.source.id : d.source;
+            var tid = typeof d.target === 'object' ? d.target.id : d.target;
+            if (focusSet.has(sid) && focusSet.has(tid)) return 0.8;
+            return 0.03;
+          });
         },
 
-        exitFocusMode() {
-          this.focusedNodeId = null;
-          applyFilters();
+        resetLayout: function() {
+          Alpine.store('graphStore').focusedNodeId = null;
+          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
+            return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 0.1;
+          });
+          app.g.select('.links').selectAll('line').style('opacity', 0.6);
+          app.simulation.alpha(1).restart();
         },
 
-        formatDate(dateStr) {
+        formatDate: function(dateStr) {
           if (!dateStr) return '';
           var d = new Date(dateStr);
           return d.toLocaleDateString('es-ES') + ' ' + d.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'});
         },
 
-        formatTime(date) {
+        formatTime: function(date) {
           return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        },
+
+        buildAdjacencyMap: function(nodes, links) {
+          app.adjacencyMap.clear();
+          for (var i = 0; i < nodes.length; i++) {
+            app.adjacencyMap.set(nodes[i].id, new Set());
+          }
+          for (var i = 0; i < links.length; i++) {
+            var sid = typeof links[i].source === 'object' ? links[i].source.id : links[i].source;
+            var tid = typeof links[i].target === 'object' ? links[i].target.id : links[i].target;
+            if (app.adjacencyMap.has(sid)) app.adjacencyMap.get(sid).add(tid);
+            if (app.adjacencyMap.has(tid)) app.adjacencyMap.get(tid).add(sid);
+          }
+        },
+
+        computeDegreeMap: function(nodes, links) {
+          var degreeMap = new Map();
+          for (var i = 0; i < links.length; i++) {
+            var s = typeof links[i].source === 'object' ? links[i].source.id : links[i].source;
+            var t = typeof links[i].target === 'object' ? links[i].target.id : links[i].target;
+            degreeMap.set(s, (degreeMap.get(s) || 0) + 1);
+            degreeMap.set(t, (degreeMap.get(t) || 0) + 1);
+          }
+          for (var i = 0; i < nodes.length; i++) {
+            nodes[i].degree = degreeMap.get(nodes[i].id) || 0;
+          }
+        },
+
+        applyHighlight: function(nodeId) {
+          if (!nodeId) {
+            app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
+              return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 0.1;
+            });
+            app.g.select('.links').selectAll('line').style('opacity', 0.6);
+            return;
+          }
+          var neighbors = app.adjacencyMap.get(nodeId) || new Set();
+          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
+            if (d.id === nodeId || neighbors.has(d.id)) return 1;
+            return Alpine.store('graphStore').activeFilters.includes(d.group) ? 0.15 : 0.1;
+          });
+          app.g.select('.links').selectAll('line').style('opacity', function(d) {
+            var sid = typeof d.source === 'object' ? d.source.id : d.source;
+            var tid = typeof d.target === 'object' ? d.target.id : d.target;
+            return (sid === nodeId || tid === nodeId) ? 0.8 : 0.05;
+          });
+        },
+
+        applyFilters: function() {
+          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
+            if (Alpine.store('graphStore').focusedNodeId) {
+              if (d.id === Alpine.store('graphStore').focusedNodeId) return 1;
+              var neighbors = app.adjacencyMap.get(Alpine.store('graphStore').focusedNodeId) || new Set();
+              if (neighbors.has(d.id)) return 0.4;
+              return 0.1;
+            }
+            return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 0.1;
+          });
+          app.g.select('.links').selectAll('line').style('opacity', function(d) {
+            if (Alpine.store('graphStore').focusedNodeId) {
+              var sid = typeof d.source === 'object' ? d.source.id : d.source;
+              var tid = typeof d.target === 'object' ? d.target.id : d.target;
+              var neighbors = app.adjacencyMap.get(Alpine.store('graphStore').focusedNodeId) || new Set();
+              if (sid === Alpine.store('graphStore').focusedNodeId || tid === Alpine.store('graphStore').focusedNodeId) return 0.8;
+              if (neighbors.has(sid) && neighbors.has(tid)) return 0.5;
+              return 0.05;
+            }
+            return 0.6;
+          });
+        },
+
+        applyFocusMode: function(nodeId) {
+          if (!nodeId) {
+            this.applyFilters();
+            return;
+          }
+          var focusSet = new Set();
+          focusSet.add(nodeId);
+          var neighbors = app.adjacencyMap.get(nodeId) || new Set();
+          neighbors.forEach(function(n) { focusSet.add(n); });
+          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
+            if (focusSet.has(d.id)) return 1;
+            return 0.08;
+          });
+          app.g.select('.links').selectAll('line').style('opacity', function(d) {
+            var sid = typeof d.source === 'object' ? d.source.id : d.source;
+            var tid = typeof d.target === 'object' ? d.target.id : d.target;
+            if (focusSet.has(sid) && focusSet.has(tid)) return 0.8;
+            return 0.03;
+          });
+        },
+
+        processUpdate: function(msg) {
+          if (msg.type !== 'init' && msg.type !== 'update') return;
+
+          var nodes = msg.data.nodes;
+          var links = msg.data.links;
+
+          app.logicalNodes = nodes;
+          this.buildAdjacencyMap(nodes, links);
+          this.computeDegreeMap(nodes, links);
+
+          for (var i = 0; i < nodes.length; i++) {
+            var id = nodes[i].id;
+            var saved = app.savedPositions[id];
+            if (saved) {
+              var x = typeof saved.x === 'number' && Number.isFinite(saved.x) ? saved.x : undefined;
+              var y = typeof saved.y === 'number' && Number.isFinite(saved.y) ? saved.y : undefined;
+              var fx = typeof saved.fx === 'number' && Number.isFinite(saved.fx) ? saved.fx : null;
+              var fy = typeof saved.fy === 'number' && Number.isFinite(saved.fy) ? saved.fy : null;
+              if (x !== undefined && y !== undefined) {
+                nodes[i].x = x;
+                nodes[i].y = y;
+                nodes[i].fx = fx;
+                nodes[i].fy = fy;
+              }
+            }
+          }
+
+          var newIds = new Set(nodes.map(function(n) { return n.id; }));
+          var added = [];
+          var removed = [];
+
+          for (var i = 0; i < nodes.length; i++) {
+            if (!app.previousNodeIds.has(nodes[i].id)) {
+              added.push(nodes[i]);
+            }
+          }
+          app.previousNodeIds.forEach(function(id) {
+            if (!newIds.has(id)) {
+              removed.push(id);
+              var oldNode = app.logicalNodes.find(function(n) { return n.id === id; });
+              if (oldNode) {
+                app.removedNodeCache.set(id, {
+                  id: oldNode.id, name: oldNode.name, group: oldNode.group,
+                  x: oldNode.x, y: oldNode.y, fx: oldNode.fx, fy: oldNode.fy, degree: oldNode.degree
+                });
+              }
+            }
+          });
+          app.previousNodeIds = newIds;
+
+          Alpine.store('graphStore').nodeCount = nodes.length;
+          Alpine.store('graphStore').linkCount = links.length;
+          Alpine.store('graphStore').updateCount++;
+          console.log('[RENDER] type=' + msg.type + ' nodes=' + nodes.length + ' links=' + links.length + ' added=' + added.length + ' removed=' + removed.length);
+
+          removed.forEach(function(id) {
+            if (app.removalTimers.has(id)) return;
+            app.nodeVisualState.set(id, 'removing');
+            var nodeG = app.nodeRefs.get(id);
+            if (!nodeG) return;
+            nodeG.classed('node-removing', true);
+            var timer = setTimeout(function() {
+              app.nodeVisualState.set(id, 'fading');
+              app.removalTimers.delete(id);
+              var nodeG = app.nodeRefs.get(id);
+              if (!nodeG) return;
+              var t = d3.transition().duration(500);
+              nodeG.transition(t).style('opacity', 0);
+              nodeG.select('circle').transition(t).attr('r', 0).on('end interrupt', function() {
+                if (!app.nodeVisualState.has(id)) return;
+                app.nodeRefs.delete(id);
+                app.nodeVisualState.delete(id);
+                app.removedNodeCache.delete(id);
+              });
+            }, 2000);
+            app.removalTimers.set(id, timer);
+          });
+
+          app.renderNodes = nodes.slice();
+          app.nodeVisualState.forEach(function(state, id) {
+            if (state === 'removing' || state === 'fading') {
+              if (!app.renderNodes.find(function(n) { return n.id === id; })) {
+                var cached = app.removedNodeCache.get(id);
+                if (cached) app.renderNodes.push(cached);
+              }
+            }
+          });
+
+          var linkSel = app.g.select('.links').selectAll('line')
+            .data(links, function(d) {
+              var s = typeof d.source === 'object' ? d.source.id : d.source;
+              var t = typeof d.target === 'object' ? d.target.id : d.target;
+              return s + '-' + t;
+            });
+          linkSel.exit().transition().duration(300).style('opacity', 0).remove();
+          linkSel = linkSel.enter().append('line').attr('class', 'link').style('opacity', 0).merge(linkSel);
+          if (Alpine.store('graphStore').focusedNodeId) {
+            this.applyFocusMode(Alpine.store('graphStore').focusedNodeId);
+          } else {
+            linkSel.transition().duration(300).style('opacity', 0.6);
+          }
+
+          var nodeSel = app.g.select('.nodes').selectAll('g')
+            .data(app.renderNodes, function(d) { return d.id; });
+
+          nodeSel.exit().each(function(d) {
+            if (app.newNodeTimers.has(d.id)) {
+              clearTimeout(app.newNodeTimers.get(d.id));
+              app.newNodeTimers.delete(d.id);
+            }
+            if (app.removalTimers.has(d.id)) {
+              clearTimeout(app.removalTimers.get(d.id));
+              app.removalTimers.delete(d.id);
+            }
+            app.nodeRefs.delete(d.id);
+            app.nodeVisualState.delete(d.id);
+            app.removedNodeCache.delete(d.id);
+          });
+          nodeSel.exit().transition().duration(400).style('opacity', 0).remove();
+
+          var nodeEnter = nodeSel.enter().append('g')
+            .attr('transform', function(d) {
+              var x = typeof d.x === 'number' && Number.isFinite(d.x) ? d.x : 0;
+              var y = typeof d.y === 'number' && Number.isFinite(d.y) ? d.y : 0;
+              return 'translate(' + x + ',' + y + ')';
+            })
+            .style('opacity', 0);
+
+          nodeEnter.each(function(d) {
+            app.nodeRefs.set(d.id, d3.select(this));
+          });
+
+          nodeEnter.append('circle').attr('r', 0);
+          nodeEnter.append('text').attr('dy', 20).attr('text-anchor', 'middle');
+
+          var nodeUpdate = nodeEnter.merge(nodeSel);
+
+          var self = this;
+          var lastClickTime = 0;
+          nodeUpdate.on('click', function(event, d) {
+            event.stopPropagation();
+            var now = Date.now();
+            if (now - lastClickTime < 300) {
+              return;
+            }
+            lastClickTime = now;
+            console.log('[CLICK] node id:', d.id, 'name:', d.name);
+            self.enterFocusMode(d.id);
+            self.selectNode(d);
+          });
+          nodeUpdate.on('dblclick', function(event, d) {
+            if (event.shiftKey) {
+              d.fx = null;
+              d.fy = null;
+              delete app.savedPositions[d.id];
+              localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(app.savedPositions));
+              app.simulation.alphaTarget(0.1).restart();
+            }
+            event.stopPropagation();
+          });
+          nodeUpdate.on('mouseover', function(event, d) {
+            self.applyHighlight(d.id);
+          });
+          nodeUpdate.on('mouseout', function() {
+            self.applyHighlight(null);
+          });
+          nodeUpdate.call(d3.drag()
+            .on('start', function(event, d) {
+              if (!event.active) app.simulation.alphaTarget(0.3).restart();
+              d.fx = d.x;
+              d.fy = d.y;
+            })
+            .on('drag', function(event, d) {
+              d.fx = event.x;
+              d.fy = event.y;
+            })
+            .on('end', function(event, d) {
+              if (!event.active) app.simulation.alphaTarget(0);
+              app.savedPositions[d.id] = { x: d.x, y: d.y, fx: d.fx, fy: d.fy };
+              localStorage.setItem('graph-viewer-layout-v1', JSON.stringify(app.savedPositions));
+            }));
+
+          nodeEnter.transition().duration(600)
+            .style('opacity', 1)
+            .select('circle')
+            .attr('r', 10);
+
+          added.forEach(function(n) {
+            if (app.newNodeTimers.has(n.id)) return;
+            app.nodeVisualState.set(n.id, 'new');
+            var nodeG = app.nodeRefs.get(n.id);
+            if (nodeG) nodeG.classed('node-new', true);
+            var timer = setTimeout(function() {
+              app.nodeVisualState.delete(n.id);
+              app.newNodeTimers.delete(n.id);
+              var nodeG = app.nodeRefs.get(n.id);
+              if (nodeG) nodeG.classed('node-new', false);
+            }, 1500);
+            app.newNodeTimers.set(n.id, timer);
+          });
+
+          nodeUpdate
+            .classed('node-new', function(d) { return app.nodeVisualState.get(d.id) === 'new'; })
+            .classed('node-removing', function(d) {
+              var s = app.nodeVisualState.get(d.id);
+              return s === 'removing' || s === 'fading';
+            });
+
+          nodeUpdate.select('circle')
+            .attr('class', 'node')
+            .attr('r', 10)
+            .attr('fill', '#f8fafc')
+            .attr('stroke', function(d) { return getNodeColor(d.group || 'unknown'); })
+            .attr('stroke-width', 2.5)
+            .style('opacity', 1);
+
+          nodeUpdate.select('text')
+            .attr('class', 'label')
+            .text(function(d) { return d.name; });
+
+          this.applyFilters();
+
+          if (msg.type === 'init') {
+            app.simulation.nodes(app.renderNodes);
+            app.simulation.force('link').links(links);
+            app.simulation.alpha(1).restart();
+          } else {
+            app.simulation.nodes(app.renderNodes);
+            app.simulation.force('link').links(links);
+            app.simulation.alpha(0.3).restart();
+          }
+        },
+
+        connectSSE: function() {
+          if (app.eventSource) {
+            app.eventSource.close();
+          }
+          app.eventSource = new EventSource('/api/events');
+          app.eventSource.onmessage = function(e) {
+            if (e.data === 'heartbeat') return;
+            app.pendingUpdate = JSON.parse(e.data);
+
+            if (!app.rafScheduled) {
+              app.rafScheduled = true;
+              requestAnimationFrame(function() {
+                app.processUpdate(app.pendingUpdate);
+                app.rafScheduled = false;
+              });
+            }
+          };
+          app.eventSource.onerror = function() {
+            Alpine.store('graphStore').lastUpdateText = 'Reconectando...';
+            setTimeout(function() { app.connectSSE(); }, 2000);
+          };
         }
       };
+
+      return app;
     }
   </script>
 </body>

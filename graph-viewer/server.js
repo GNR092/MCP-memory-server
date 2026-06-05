@@ -72,7 +72,10 @@ function buildGraphSnapshot() {
   const entities = db.prepare('SELECT id, name, entityType FROM entities').all();
   const relations = db.prepare('SELECT from_id, to_id, relationType FROM relations').all();
   const data = {
-    nodes: entities.map(function(e) { return { id: e.id, name: e.name, group: e.entityType || 'unknown' }; }),
+    nodes: entities.map(function(e) {
+      var et = (typeof e.entityType === 'string' ? e.entityType.trim().toLowerCase() : '');
+      return { id: e.id, name: e.name, group: et || 'unknown' };
+    }),
     links: relations.map(function(r) { return { source: r.from_id, target: r.to_id, type: r.relationType }; })
   };
   const ms = Date.now() - t0;
