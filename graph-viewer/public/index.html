@@ -21,10 +21,11 @@
   </script>
   <style>
     [x-cloak] { display: none !important; }
-    .node { stroke: #fff; stroke-width: 1.5px; cursor: pointer; fill: #fff; }
-    .node:hover { stroke-width: 3px; }
-    .link { stroke: #4a4a6a; stroke-opacity: 0.6; }
-    .label { fill: #ccc; font-size: 10px; pointer-events: none; }
+    .node { stroke: #9ca3af; stroke-width: 1.7px; cursor: pointer; fill: #f8fafc; transition: all 0.15s ease; }
+    .node:hover { stroke-width: 3px; filter: drop-shadow(0 0 6px currentColor); }
+    .link { stroke: #4a4a6a; stroke-opacity: 0.4; transition: stroke-opacity 0.2s; }
+    .link:hover { stroke-opacity: 0.9; }
+    .label { fill: #e2e8f0; font-size: 9px; pointer-events: none; font-weight: 400; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
     .node-new circle {
       animation: newNodePulse 1.5s ease-out forwards;
     }
@@ -47,112 +48,126 @@
       stroke-width: 3px !important;
       opacity: 1;
     }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #4a5568;
+      border-radius: 2px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #718096;
+    }
   </style>
 </head>
 <body class="bg-dark text-gray-200 overflow-hidden" x-data="graphApp()">
 
-  <div class="fixed top-4 left-4 bg-darkpanel rounded-lg p-3 text-sm border border-gray-700 flex items-center gap-4 z-50">
-    <span>Nodos: <span class="text-blue-400" x-text="$store.graphStore.nodeCount">0</span></span>
-    <span>Enlaces: <span class="text-blue-400" x-text="$store.graphStore.linkCount">0</span></span>
-    <span>Updates: <span class="text-blue-400" x-text="$store.graphStore.updateCount">0</span></span>
-    <span class="text-gray-500 text-xs" x-text="$store.graphStore.lastUpdateText">Sin cambios detectados</span>
-    <button @click="forceRefresh()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs">Actualizar ahora</button>
-  </div>
-
-  <div class="fixed top-4 right-4 bg-darkpanel rounded-lg p-3 text-xs border border-gray-700 z-50">
-    <h4 class="text-gray-400 uppercase mb-2">Filtros</h4>
-    <template x-for="type in ['critical', 'important', 'normal', 'temporary', 'deprecated', 'unknown']" :key="type">
-      <label class="flex items-center gap-2 mb-1 cursor-pointer">
-        <input type="checkbox" x-model="$store.graphStore.activeFilters" :value="type" class="rounded bg-gray-700 border-gray-600">
-        <div class="w-3 h-3 rounded-full" :style="{ background: colorMap[type] }"></div>
-        <span class="capitalize" x-text="type"></span>
-      </label>
-    </template>
+  <div class="fixed top-4 left-4 bg-darkpanel/90 backdrop-blur rounded-xl p-3 text-xs border border-gray-700/50 flex items-center gap-4 z-50 shadow-lg shadow-black/20">
+    <div class="flex items-center gap-1.5">
+      <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M12 9V6M12 15v3M9 12H6M15 12h3" stroke-linecap="round"/></svg>
+      <span class="text-gray-400">N:</span>
+      <span class="text-blue-400 font-bold tabular-nums" x-text="$store.graphStore.nodeCount">0</span>
+    </div>
+    <div class="w-px h-4 bg-gray-700"></div>
+    <div class="flex items-center gap-1.5">
+      <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 12h16M4 12l4-4M4 12l4 4M20 12l-4-4M20 12l-4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="text-gray-400">E:</span>
+      <span class="text-purple-400 font-bold tabular-nums" x-text="$store.graphStore.linkCount">0</span>
+    </div>
+    <div class="w-px h-4 bg-gray-700"></div>
+    <div class="flex items-center gap-1.5">
+      <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-linecap="round"/></svg>
+      <span class="text-green-400 font-bold tabular-nums" x-text="$store.graphStore.updateCount">0</span>
+    </div>
+    <div class="w-px h-4 bg-gray-700"></div>
+    <span class="text-gray-500 text-[10px] max-w-[120px] truncate" x-text="$store.graphStore.lastUpdateText">Sin cambios detectados</span>
+    <button @click="forceRefresh()" class="ml-auto bg-gray-700/50 hover:bg-gray-600/70 px-2.5 py-1 rounded-lg text-[10px] text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m0 0a8.001 8.001 0 0115.356 2M44v5h.582m0 0a8.001 8.001 0 0115.356 2M20 20v-5h-.582m0 0a8.001 8.001 0 01-15.356-2M20 20v-5h-.582m0 0a8.001 8.001 0 01-15.356-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Refresh
+    </button>
   </div>
 
   <div x-show="$store.graphStore.focusedNodeId" x-cloak
-    class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 hover:bg-blue-500 rounded-lg px-4 py-2 text-sm font-medium cursor-pointer z-50"
+    class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600/90 hover:bg-blue-500 backdrop-blur rounded-xl px-4 py-2 text-sm font-medium cursor-pointer z-50 shadow-lg shadow-blue-900/30 transition-all"
     @click="resetLayout()">
-    ↺ Reacomodar
-  </div>
-
-  <div class="fixed bottom-4 left-4 bg-darkpanel rounded-lg p-3 text-xs border border-gray-700 z-50">
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#ff6b6b"></div> critical</div>
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#ffd93d"></div> important</div>
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#6bcb77"></div> normal</div>
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#4d96ff"></div> temporary</div>
-    <div class="flex items-center gap-2 mb-1"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#9d4edd"></div> deprecated</div>
-    <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full border-2" style="background:#fff; border-color:#aaa"></div> unknown</div>
+    <span class="flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m0 0a8.001 8.001 0 0115.356 2M20 20v-5h-.581m0 0a8.001 8.001 0 01-15.356-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Reacomodar
+    </span>
   </div>
 
   <div x-show="$store.graphStore.selectedNode !== null" x-cloak
-    class="fixed top-20 right-4 w-96 max-h-[calc(100vh-120px)] bg-darkpanel rounded-lg border border-gray-700 overflow-hidden flex flex-col z-50">
-    <div class="px-4 py-3 bg-gray-800/90 border-b border-gray-700 flex justify-between items-center">
-      <h3 class="text-sm font-medium text-blue-400 truncate" x-text="$store.graphStore.selectedNode?.name">-</h3>
-      <button @click="$store.graphStore.selectedNode = null" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
+    class="fixed top-20 right-4 w-[420px] max-h-[calc(100vh-120px)] bg-darkpanel/95 backdrop-blur-sm rounded-2xl border border-gray-700/50 overflow-hidden flex flex-col z-50 shadow-2xl shadow-black/40">
+    <!-- Header with gradient -->
+    <div class="px-5 py-4 bg-gradient-to-r from-blue-900/40 to-purple-900/40 border-b border-gray-700/50">
+      <div class="flex justify-between items-start">
+        <div class="flex-1 min-w-0">
+          <h3 class="text-base font-semibold text-blue-300 truncate" x-text="$store.graphStore.selectedNode?.name">-</h3>
+          <div class="flex items-center gap-2 mt-1.5">
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800/70 text-gray-400 font-mono" x-text="'#' + ($store.graphStore.entityDetail?.entity?.id || '-')"></span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800/70 text-gray-300 capitalize" x-text="$store.graphStore.entityDetail?.entity?.entityType || '-'"></span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded capitalize" :class="getImportanceClass($store.graphStore.selectedNode?.group)" x-text="$store.graphStore.selectedNode?.group || 'unknown'"></span>
+          </div>
+        </div>
+        <button @click="$store.graphStore.selectedNode = null" class="ml-3 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg p-1.5 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
     </div>
 
     <template x-if="$store.graphStore.loadingDetail">
-      <div class="p-4 text-center">
-        <p class="text-gray-500 text-sm">Cargando...</p>
+      <div class="p-8 text-center">
+        <div class="inline-flex items-center gap-2 text-gray-400">
+          <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+          <span class="text-sm">Cargando...</span>
+        </div>
       </div>
     </template>
 
     <template x-if="!$store.graphStore.loadingDetail && $store.graphStore.entityDetail">
-      <div class="p-4 overflow-y-auto flex-1">
-        <!-- Node Info Header -->
-        <div class="mb-4 pb-3 border-b border-gray-700">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-xs text-gray-500">ID:</span>
-            <span class="text-xs text-gray-300 font-mono" x-text="$store.graphStore.entityDetail.entity.id"></span>
-          </div>
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-xs text-gray-500">Tipo:</span>
-            <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-200 capitalize" x-text="$store.graphStore.entityDetail.entity.entityType"></span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500">Grupo:</span>
-            <span class="text-xs px-2 py-0.5 rounded capitalize" :class="getImportanceClass($store.graphStore.selectedNode?.group)" x-text="$store.graphStore.selectedNode?.group || 'unknown'"></span>
-          </div>
-        </div>
+      <div class="p-5 overflow-y-auto flex-1 space-y-5">
 
-        <!-- Observations -->
-        <div class="mb-4">
-          <div class="flex items-center justify-between mb-2">
-            <h4 class="text-xs text-gray-600 uppercase">Observaciones</h4>
-            <span class="text-xs text-gray-500" x-text="$store.graphStore.entityDetail.observations.length + ' total'"></span>
+        <!-- observations -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wider">Observaciones</h4>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400" x-text="$store.graphStore.entityDetail.observations.length + ' obs'"></span>
           </div>
           <template x-if="$store.graphStore.entityDetail.observations.length === 0">
-            <p class="text-gray-600 text-xs italic">Sin observaciones</p>
+            <p class="text-gray-600 text-xs italic py-2">Sin observaciones</p>
           </template>
-          <div class="max-h-60 overflow-y-auto space-y-2 pr-1">
+          <div class="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
             <template x-for="obs in $store.graphStore.entityDetail.observations" :key="obs.id">
-              <div class="bg-white/5 rounded p-2 text-xs">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="px-1.5 py-0.5 rounded text-[10px] uppercase" :class="getImportanceClass(obs.importance)" x-text="obs.importance"></span>
+              <div class="bg-white/[0.03] hover:bg-white/[0.06] rounded-lg p-3 text-xs transition-colors border border-white/[0.03]">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="px-2 py-0.5 rounded text-[10px] uppercase font-medium" :class="getImportanceClass(obs.importance)" x-text="obs.importance"></span>
                   <span class="text-gray-600 text-[10px]" x-text="formatDate(obs.created_at)"></span>
                 </div>
-                <p class="text-gray-300 leading-relaxed" x-text="obs.content"></p>
+                <p class="text-gray-300 leading-relaxed text-[11px]" x-text="obs.content"></p>
               </div>
             </template>
           </div>
         </div>
 
         <!-- Outgoing Relations -->
-        <div class="mb-4">
-          <div class="flex items-center justify-between mb-2">
-            <h4 class="text-xs text-gray-600 uppercase">Relaciones salientes</h4>
-            <span class="text-xs text-blue-400" x-text="$store.graphStore.entityDetail.outgoing.length + ' →'"></span>
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wider">Relaciones salientes</h4>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400" x-text="$store.graphStore.entityDetail.outgoing.length + ' →'"></span>
           </div>
           <template x-if="$store.graphStore.entityDetail.outgoing.length === 0">
-            <p class="text-gray-600 text-xs italic">Sin relaciones</p>
+            <p class="text-gray-600 text-xs italic py-2">Sin relaciones</p>
           </template>
-          <div class="max-h-40 overflow-y-auto space-y-1 pr-1">
+          <div class="max-h-36 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
             <template x-for="rel in $store.graphStore.entityDetail.outgoing" :key="rel.id">
-              <div class="bg-white/5 rounded p-2 text-xs flex items-center gap-2">
-                <span class="text-[10px] text-gray-600 font-mono" x-text="'#' + rel.id"></span>
-                <span class="px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300 text-[10px] truncate" x-text="rel.relationType"></span>
-                <span class="text-gray-300 truncate flex-1" x-text="rel.to_name"></span>
+              <div class="bg-white/[0.03] hover:bg-white/[0.06] rounded-lg p-2.5 text-xs transition-colors flex items-center gap-2 border border-white/[0.03]">
+                <span class="text-[9px] text-gray-600 font-mono" x-text="'#' + rel.id"></span>
+                <span class="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 text-[10px] font-medium truncate" x-text="rel.relationType"></span>
+                <span class="text-gray-300 truncate flex-1 text-[11px]" x-text="rel.to_name"></span>
+                <svg class="w-3 h-3 text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </div>
             </template>
           </div>
@@ -160,19 +175,20 @@
 
         <!-- Incoming Relations -->
         <div>
-          <div class="flex items-center justify-between mb-2">
-            <h4 class="text-xs text-gray-600 uppercase">Relaciones entrantes</h4>
-            <span class="text-xs text-green-400" x-text="$store.graphStore.entityDetail.incoming.length + ' ←'"></span>
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-xs font-medium text-gray-400 uppercase tracking-wider">Relaciones entrantes</h4>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400" x-text="$store.graphStore.entityDetail.incoming.length + ' ←'"></span>
           </div>
           <template x-if="$store.graphStore.entityDetail.incoming.length === 0">
-            <p class="text-gray-600 text-xs italic">Sin relaciones</p>
+            <p class="text-gray-600 text-xs italic py-2">Sin relaciones</p>
           </template>
-          <div class="max-h-40 overflow-y-auto space-y-1 pr-1">
+          <div class="max-h-36 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
             <template x-for="rel in $store.graphStore.entityDetail.incoming" :key="rel.id">
-              <div class="bg-white/5 rounded p-2 text-xs flex items-center gap-2">
-                <span class="text-[10px] text-gray-600 font-mono" x-text="'#' + rel.id"></span>
-                <span class="text-gray-300 truncate flex-1 text-right" x-text="rel.from_name"></span>
-                <span class="px-1.5 py-0.5 rounded bg-green-900/50 text-green-300 text-[10px] truncate" x-text="rel.relationType"></span>
+              <div class="bg-white/[0.03] hover:bg-white/[0.06] rounded-lg p-2.5 text-xs transition-colors flex items-center gap-2 border border-white/[0.03]">
+                <svg class="w-3 h-3 text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="text-gray-300 truncate flex-1 text-[11px] text-right" x-text="rel.from_name"></span>
+                <span class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-medium truncate" x-text="rel.relationType"></span>
+                <span class="text-[9px] text-gray-600 font-mono" x-text="'#' + rel.id"></span>
               </div>
             </template>
           </div>
@@ -240,7 +256,6 @@
             return;
           }
           Alpine.store('graphStore')._initialized = true;
-          console.log('[INIT] Starting initialization');
 
           var width = window.innerWidth;
           var height = window.innerHeight;
@@ -309,22 +324,17 @@
         },
 
         selectNode: function(node) {
-          console.log('[selectNode] called with node.id:', node && node.id);
           Alpine.store('graphStore').selectedNode = node;
           Alpine.store('graphStore').entityDetail = null;
           Alpine.store('graphStore').loadingDetail = true;
-          console.log('[selectNode] selectedNode set');
 
-          var self = this;
           fetch('/api/entity/' + node.id)
             .then(function(res) { return res.json(); })
             .then(function(data) {
-              console.log('[selectNode] got data');
               Alpine.store('graphStore').entityDetail = data;
               Alpine.store('graphStore').loadingDetail = false;
             })
-            .catch(function(err) {
-              console.log('[selectNode] error:', err);
+            .catch(function() {
               Alpine.store('graphStore').loadingDetail = false;
             });
         },
@@ -404,7 +414,7 @@
         applyHighlight: function(nodeId) {
           if (!nodeId) {
             app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
-              return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 0.1;
+return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 1;
             });
             app.g.select('.links').selectAll('line').style('opacity', 0.6);
             return;
@@ -412,12 +422,12 @@
           var neighbors = app.adjacencyMap.get(nodeId) || new Set();
           app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
             if (d.id === nodeId || neighbors.has(d.id)) return 1;
-            return Alpine.store('graphStore').activeFilters.includes(d.group) ? 0.15 : 0.1;
+            return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 1;
           });
           app.g.select('.links').selectAll('line').style('opacity', function(d) {
             var sid = typeof d.source === 'object' ? d.source.id : d.source;
             var tid = typeof d.target === 'object' ? d.target.id : d.target;
-            return (sid === nodeId || tid === nodeId) ? 0.8 : 0.05;
+            return (sid === nodeId || tid === nodeId) ? 0.8 : 0.3;
           });
         },
 
@@ -426,8 +436,8 @@
             if (Alpine.store('graphStore').focusedNodeId) {
               if (d.id === Alpine.store('graphStore').focusedNodeId) return 1;
               var neighbors = app.adjacencyMap.get(Alpine.store('graphStore').focusedNodeId) || new Set();
-              if (neighbors.has(d.id)) return 0.4;
-              return 0.1;
+              if (neighbors.has(d.id)) return 1;
+              return 1;
             }
             return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 0.1;
           });
@@ -437,8 +447,8 @@
               var tid = typeof d.target === 'object' ? d.target.id : d.target;
               var neighbors = app.adjacencyMap.get(Alpine.store('graphStore').focusedNodeId) || new Set();
               if (sid === Alpine.store('graphStore').focusedNodeId || tid === Alpine.store('graphStore').focusedNodeId) return 0.8;
-              if (neighbors.has(sid) && neighbors.has(tid)) return 0.5;
-              return 0.05;
+              if (neighbors.has(sid) && neighbors.has(tid)) return 0.6;
+              return 0.3;
             }
             return 0.6;
           });
@@ -518,7 +528,6 @@
           Alpine.store('graphStore').nodeCount = nodes.length;
           Alpine.store('graphStore').linkCount = links.length;
           Alpine.store('graphStore').updateCount++;
-          console.log('[RENDER] type=' + msg.type + ' nodes=' + nodes.length + ' links=' + links.length + ' added=' + added.length + ' removed=' + removed.length);
 
           removed.forEach(function(id) {
             if (app.removalTimers.has(id)) return;
@@ -560,7 +569,7 @@
               return s + '-' + t;
             });
           linkSel.exit().transition().duration(300).style('opacity', 0).remove();
-          linkSel = linkSel.enter().append('line').attr('class', 'link').style('opacity', 0).merge(linkSel);
+          linkSel = linkSel.enter().append('line').attr('class', 'link').attr('stroke-width', 1).style('opacity', 0).merge(linkSel);
           if (Alpine.store('graphStore').focusedNodeId) {
             this.applyFocusMode(Alpine.store('graphStore').focusedNodeId);
           } else {
@@ -597,7 +606,7 @@
             app.nodeRefs.set(d.id, d3.select(this));
           });
 
-          nodeEnter.append('circle').attr('r', 0);
+          nodeEnter.append('circle').attr('r', 10).attr('fill', '#f8fafc').attr('stroke', '#9ca3af').attr('stroke-width', 1.7).style('opacity', 1);
           nodeEnter.append('text').attr('dy', 20).attr('text-anchor', 'middle');
 
           var nodeUpdate = nodeEnter.merge(nodeSel);
@@ -611,7 +620,6 @@
               return;
             }
             lastClickTime = now;
-            console.log('[CLICK] node id:', d.id, 'name:', d.name);
             self.enterFocusMode(d.id);
             self.selectNode(d);
           });
@@ -648,9 +656,7 @@
             }));
 
           nodeEnter.transition().duration(600)
-            .style('opacity', 1)
-            .select('circle')
-            .attr('r', 10);
+            .style('opacity', 1);
 
           added.forEach(function(n) {
             if (app.newNodeTimers.has(n.id)) return;
@@ -675,10 +681,10 @@
 
           nodeUpdate.select('circle')
             .attr('class', 'node')
-            .attr('r', 10)
+            .attr('r', function(d) { return Math.max(6, Math.min(20, 6 + d.degree * 1.5)); })
             .attr('fill', '#f8fafc')
             .attr('stroke', function(d) { return getNodeColor(d.group || 'unknown'); })
-            .attr('stroke-width', 2.5)
+            .attr('stroke-width', function(d) { return Math.max(1.5, Math.min(4, 1.5 + d.degree * 0.2)); })
             .style('opacity', 1);
 
           nodeUpdate.select('text')
