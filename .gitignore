@@ -1,3 +1,9 @@
 node_modules/
 .codesearch.db/
 *.db
+.env
+.env.local
+.env.*.local
+*.log
+coverage/
+.DS_Store

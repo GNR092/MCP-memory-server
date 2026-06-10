@@ -1,8 +1,27 @@
 {
   "name": "memory",
   "version": "1.0.0",
-  "description": "MCP memory server",
+  "description": "MCP memory server with Streamable HTTP transport and OAuth 2.1 security",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/unit/*.test.js test/integration/*.test.js",
+    "test:unit": "node --test test/unit/*.test.js",
+    "test:integration": "node --test test/integration/*.test.js"
+  },
   "dependencies": {
-    "@iachilles/memento": "^0.6.1"
+    "@iachilles/memento": "^0.6.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^11.10.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "jose": "^6.2.3",
+    "pkce-challenge": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

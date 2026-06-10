@@ -1,13 +1,26 @@
 services:
   memory:
-    image: gnr092/memoryproxy
+    build: .
+    image: gnr092/memoryproxy:latest
     container_name: memory
+    ports:
+      - "3000:3000"
     volumes:
       - ./memorydata:/data
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3000
+      - MEMORY_DB_PATH=/data/memory.db
+      - GRAPH_ENABLED=true
+      - AUTH_ENABLED=true
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - STATIC_TOKENS=${STATIC_TOKENS:-}
     restart: unless-stopped
-    networks:
-      - laravel-shared-network
-
-networks:
-  laravel-shared-network:
-    external: true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
