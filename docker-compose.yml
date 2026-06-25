@@ -1,13 +1,22 @@
 services:
-  memory:
+  memorylocal:
     image: gnr092/memoryproxy
-    container_name: memory
+    container_name: memorylocal
     volumes:
       - ./memorydata:/data
     restart: unless-stopped
     networks:
-      - laravel-shared-network
+      - traefik_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memory.rule=Host(`memory2.gnr092hub.org`)"
+      - "traefik.http.routers.memory.entrypoints=websecure"
+      - "traefik.http.routers.memory.tls=true"
+      - "traefik.http.routers.memory.tls.certresolver=letsencrypt"
+      - "traefik.http.services.memory.loadbalancer.server.port=8945"
+      - "traefik.http.middlewares.auth.basicauth.users=GNR092:$$apr1$$IidPB665$$XKxyhm2nRZaGZEu0zV0xj0"
+      - "traefik.http.routers.memory.middlewares=auth"
 
 networks:
-  laravel-shared-network:
+  traefik_network:
     external: true

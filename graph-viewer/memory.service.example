@@ -1,0 +1,17 @@
+[Unit]
+Description=Memory Graph Viewer
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/compras/docker/memory2/graph-viewer
+Environment=PORT=3023
+Environment=HOST=0.0.0.0
+ExecStart=/usr/bin/node /home/compras/docker/memory2/graph-viewer/server.js
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/home/compras/docker/memory2/graph-viewer/graph-viewer.log
+StandardError=append:/home/compras/docker/memory2/graph-viewer/graph-viewer.log
+
+[Install]
+WantedBy=default.target
