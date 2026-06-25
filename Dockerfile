@@ -19,6 +19,7 @@ COPY start nginx.conf ./
 RUN chmod +x start \
     && rm -f /etc/nginx/sites-enabled/default \
     && ln -s /app/nginx.conf /etc/nginx/sites-enabled/graph-viewer \
+    && rm -rf /app/graph-viewer/node_modules \
     && npm install --prefix /app/graph-viewer
 
 RUN mkdir -p /data
