@@ -328,7 +328,7 @@
           Alpine.store('graphStore').entityDetail = null;
           Alpine.store('graphStore').loadingDetail = true;
 
-          fetch('/api/entity/' + node.id)
+          fetch('api/entity/' + node.id)
             .then(function(res) { return res.json(); })
             .then(function(data) {
               Alpine.store('graphStore').entityDetail = data;
@@ -340,7 +340,7 @@
         },
 
         forceRefresh: function() {
-          fetch('/api/force-refresh');
+          fetch('api/force-refresh');
           Alpine.store('graphStore').lastUpdateText = 'Refresh forzado enviado...';
         },
 
@@ -708,7 +708,7 @@ return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 1;
           if (app.eventSource) {
             app.eventSource.close();
           }
-          app.eventSource = new EventSource('/api/events');
+          app.eventSource = new EventSource('api/events');
           app.eventSource.onmessage = function(e) {
             if (e.data === 'heartbeat') return;
             app.pendingUpdate = JSON.parse(e.data);

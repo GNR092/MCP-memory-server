@@ -13,7 +13,7 @@ services:
       - "traefik.http.routers.memory.entrypoints=websecure"
       - "traefik.http.routers.memory.tls=true"
       - "traefik.http.routers.memory.tls.certresolver=letsencrypt"
-      - "traefik.http.services.memory.loadbalancer.server.port=8945"
+      - "traefik.http.services.memory.loadbalancer.server.port=80"
       - "traefik.http.middlewares.auth.basicauth.users=GNR092:$$apr1$$IidPB665$$XKxyhm2nRZaGZEu0zV0xj0"
       - "traefik.http.routers.memory.middlewares=auth"
 

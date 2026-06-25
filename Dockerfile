@@ -2,6 +2,7 @@ FROM node:20-slim
 
 RUN apt-get update && apt-get install -y \
     bash \
+    nginx \
     python3 \
     python3-pip \
     sqlite3 \
@@ -12,13 +13,17 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY start .
+COPY graph-viewer/ ./graph-viewer/
+COPY start nginx.conf ./
 
-RUN chmod +x start
+RUN chmod +x start \
+    && rm -f /etc/nginx/sites-enabled/default \
+    && ln -s /app/nginx.conf /etc/nginx/sites-enabled/graph-viewer \
+    && npm install --prefix /app/graph-viewer
 
-RUN mkdir -p /data && chown -R node:node /data
+RUN mkdir -p /data
 
-EXPOSE 8945
+EXPOSE 80 8945
 
 VOLUME ["/data"]
 

@@ -1,5 +1,13 @@
 #!/bin/bash
-trap 'kill -SIGTERM $PID; wait $PID' SIGTERM
+trap 'kill -TERM $NGINX_PID $MCP_PID $GRAPH_PID 2>/dev/null; exit' SIGTERM SIGINT
+
+nginx -g 'daemon off;' &
+NGINX_PID=$!
+
+DB_PATH=/data/memory.db node /app/graph-viewer/server.js &
+GRAPH_PID=$!
+
 mcp-proxy --port 8945 --host 0.0.0.0 -e MEMORY_DB_PATH "/data/memory.db" -- memento &
-PID=$!
-wait $PID
+MCP_PID=$!
+
+wait $MCP_PID
