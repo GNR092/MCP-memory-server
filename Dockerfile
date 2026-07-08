@@ -38,6 +38,10 @@ COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 # Copiar paquetes pip (mcp-proxy y dependencias)
 COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
 
+# Versión de la aplicación (inyectar con --build-arg VERSION=x.y.z)
+ARG VERSION=0.0.0
+ENV APP_VERSION=$VERSION
+
 WORKDIR /app
 
 COPY graph-viewer/ ./graph-viewer/

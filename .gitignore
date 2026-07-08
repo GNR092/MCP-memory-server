@@ -6,3 +6,4 @@ node_modules/
 *.zip
 memorydata/
 docker-compose.yml
+build.sh

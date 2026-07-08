@@ -1,4 +1,8 @@
 #!/bin/bash
+echo "================================================"
+echo "  MCP Memory Server v${APP_VERSION:-0.0.0}"
+echo "================================================"
+
 trap 'kill -TERM $NGINX_PID $MCP_PID $GRAPH_PID 2>/dev/null; exit' SIGTERM SIGINT
 
 nginx -g 'daemon off;' &
