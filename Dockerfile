@@ -24,6 +24,9 @@ RUN chmod +x start \
 
 RUN mkdir -p /data
 
+HEALTHCHECK --interval=30s --timeout=6s --start-period=20s --retries=3 \
+  CMD timeout 5 python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8945/sse', timeout=4)" || exit 1
+
 EXPOSE 80 8945
 
 VOLUME ["/data"]
