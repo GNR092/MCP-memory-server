@@ -8,6 +8,8 @@ const PORT = process.env.PORT || 3022;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'memorydata', 'memory.db');
 const POLLING_INTERVAL = parseInt(process.env.POLLING_INTERVAL || '2000');
 const SSE_HEARTBEAT_INTERVAL = 25000;
+const APP_VERSION = process.env.APP_VERSION ||
+  require(path.join(__dirname, '..', 'package.json')).version || '0.0.0';
 
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -192,7 +194,11 @@ heartbeatInterval = setInterval(function() {
   }
 }, SSE_HEARTBEAT_INTERVAL);
 
-app.get('/health', function(req, res) { res.json({ status: 'ok', clients: clients.length, polling_ms: POLLING_INTERVAL }); });
+app.get('/health', function(req, res) { res.json({ status: 'ok', version: APP_VERSION, clients: clients.length, polling_ms: POLLING_INTERVAL }); });
+
+app.get('/version', function(req, res) {
+  res.json({ name: 'MCP Memory Server', version: APP_VERSION, node: process.version, platform: process.platform });
+});
 
 app.get('/api/force-refresh', function(req, res) {
   try {
@@ -205,6 +211,7 @@ app.get('/api/force-refresh', function(req, res) {
 });
 
 var server = app.listen(PORT, '0.0.0.0', function() {
+  console.log('[SERVER] MCP Memory Server v' + APP_VERSION);
   console.log('[SERVER] Running on http://0.0.0.0:' + PORT);
   console.log('[SERVER] DB: ' + DB_PATH);
   console.log('[SERVER] Polling interval: ' + POLLING_INTERVAL + 'ms');
