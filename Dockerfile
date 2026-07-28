@@ -68,10 +68,12 @@ COPY start nginx.conf ./
 RUN chmod +x start \
     && ln -s /app/nginx.conf /etc/nginx/sites-enabled/graph-viewer
 
-# Crear usuario no-root y volume
+# Crear usuario no-root, dirs temporales de nginx y volume
 RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin appuser \
     && mkdir -p /data \
-    && chown -R appuser:appgroup /app /data
+    && mkdir -p /var/lib/nginx/body /var/lib/nginx/proxy /var/lib/nginx/fastcgi \
+    && mkdir -p /var/lib/nginx/uwsgi /var/lib/nginx/scgi \
+    && chown -R appuser:appgroup /app /data /var/lib/nginx
 
 USER appuser
 

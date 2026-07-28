@@ -10,7 +10,7 @@ if command -v sqlite3 &>/dev/null && [ -f /data/memory.db ]; then
   sqlite3 /data/memory.db "PRAGMA cache_size = -4000; PRAGMA mmap_size = 67108864;" 2>/dev/null || true
 fi
 
-nginx -g 'daemon off;' &
+nginx -g 'daemon off;' -g 'pid /tmp/nginx.pid;' &
 NGINX_PID=$!
 
 # Graph-viewer: heap limitado a 96MB (solo sirve el grafo)
