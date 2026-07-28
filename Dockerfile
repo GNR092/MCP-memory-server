@@ -3,6 +3,11 @@
 # ==============================================================
 FROM platformatic/node-caged:25-slim AS builder
 
+WORKDIR /build
+
+# Copiar tarball del motor de embeddings (instalación local, no desde npm)
+COPY *.tgz ./
+
 RUN apt-get update && apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
     build-essential \
@@ -10,7 +15,7 @@ RUN apt-get update && apt-get upgrade -y && \
     python3-pip \
     python3-dev \
     sqlite3 \
-    && npm install -g @gener/memento-minilm@0.6.1-minilm.1 \
+    && npm install -g ./iachilles-memento-0.6.1.tgz \
     && pip install --no-cache-dir --break-system-packages mcp-proxy
 
 # Compilar dependencias del graph-viewer (necesita build-essential para better-sqlite3)
