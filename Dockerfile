@@ -16,7 +16,7 @@ RUN apt-get update && apt-get upgrade -y && \
     python3-dev \
     sqlite3 \
     && npm install -g ./iachilles-memento-0.6.1.tgz \
-    && pip install --no-cache-dir --break-system-packages mcp-proxy
+    && pip install --no-cache-dir --break-system-packages "mcp<2.0.0" "mcp-proxy==0.12.0"
 
 # Compilar dependencias del graph-viewer (necesita build-essential para better-sqlite3)
 WORKDIR /app
@@ -47,9 +47,8 @@ RUN apt-get update && apt-get upgrade -y && \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /etc/nginx/sites-enabled/default
 
-# Copiar solo binarios necesarios desde builder
-COPY --from=builder /usr/local/bin/memento /usr/local/bin/memento
-COPY --from=builder /usr/local/bin/mcp-proxy /usr/local/bin/mcp-proxy
+# Copiar binarios desde builder (COPY de directorio preserva symlinks)
+COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 # Copiar paquetes pip (mcp-proxy y dependencias)
