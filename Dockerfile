@@ -10,17 +10,19 @@ RUN apt-get update && apt-get upgrade -y && \
     python3-pip \
     python3-dev \
     sqlite3 \
-    && npm install -g @iachilles/memento@latest \
-    && pip install --no-cache-dir --break-system-packages mcp-proxy \
-    && apt-get purge -y --auto-remove python3-dev build-essential \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && npm install -g @gener/memento-minilm@0.6.1-minilm.1 \
+    && pip install --no-cache-dir --break-system-packages mcp-proxy
 
-# Compilar dependencias del graph-viewer (necesita build-essential)
+# Compilar dependencias del graph-viewer (necesita build-essential para better-sqlite3)
 WORKDIR /app
 COPY graph-viewer/ ./graph-viewer/
 RUN rm -rf /app/graph-viewer/node_modules && \
     npm install --prefix /app/graph-viewer
+
+# Limpiar dependencias de compilación (ya no se necesitan)
+RUN apt-get purge -y --auto-remove python3-dev build-essential \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # ==============================================================
 # STAGE 2: runtime — solo lo necesario para ejecutar

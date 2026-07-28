@@ -3,6 +3,6 @@
   "version": "1.2.0",
   "description": "MCP memory server",
   "dependencies": {
-    "@iachilles/memento": "^0.6.1"
+    "@gener/memento-minilm": "^0.6.1"
   }
 }
