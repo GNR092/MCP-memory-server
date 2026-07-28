@@ -4,8 +4,7 @@
 FROM platformatic/node-caged:25-slim AS builder
 
 RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y \
-    bash \
+    apt-get install -y --no-install-recommends \
     build-essential \
     python3 \
     python3-pip \
@@ -13,6 +12,7 @@ RUN apt-get update && apt-get upgrade -y && \
     sqlite3 \
     && npm install -g @iachilles/memento@latest \
     && pip install --no-cache-dir --break-system-packages mcp-proxy \
+    && apt-get purge -y --auto-remove python3-dev build-essential \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,11 +27,12 @@ RUN rm -rf /app/graph-viewer/node_modules && \
 # ==============================================================
 FROM platformatic/node-caged:25-slim
 
-ENV NODE_OPTIONS="--max-old-space-size=256"
+ENV NODE_OPTIONS="--max-old-space-size=256" \
+    NODE_ENV=production
 
 # Parchear CVEs e instalar solo runtime deps
 RUN apt-get update && apt-get upgrade -y && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
     nginx \
     python3 \
     sqlite3 \
@@ -39,8 +40,9 @@ RUN apt-get update && apt-get upgrade -y && \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /etc/nginx/sites-enabled/default
 
-# Copiar binarios globales y módulos npm compilados desde builder
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Copiar solo binarios necesarios desde builder
+COPY --from=builder /usr/local/bin/memento /usr/local/bin/memento
+COPY --from=builder /usr/local/bin/mcp-proxy /usr/local/bin/mcp-proxy
 COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 # Copiar paquetes pip (mcp-proxy y dependencias)
@@ -60,7 +62,12 @@ COPY start nginx.conf ./
 RUN chmod +x start \
     && ln -s /app/nginx.conf /etc/nginx/sites-enabled/graph-viewer
 
-RUN mkdir -p /data
+# Crear usuario no-root y volume
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin appuser \
+    && mkdir -p /data \
+    && chown -R appuser:appgroup /app /data
+
+USER appuser
 
 HEALTHCHECK --interval=30s --timeout=6s --start-period=20s --retries=3 \
   CMD timeout 5 python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8945/sse', timeout=4)" || exit 1
