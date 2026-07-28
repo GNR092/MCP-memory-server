@@ -5,12 +5,19 @@ echo "================================================"
 
 trap 'kill -TERM $NGINX_PID $MCP_PID $GRAPH_PID 2>/dev/null; exit' SIGTERM SIGINT
 
+# Optimizar SQLite: limitar cache a 4MB y mmap a 64MB
+if command -v sqlite3 &>/dev/null && [ -f /data/memory.db ]; then
+  sqlite3 /data/memory.db "PRAGMA cache_size = -4000; PRAGMA mmap_size = 67108864;" 2>/dev/null || true
+fi
+
 nginx -g 'daemon off;' &
 NGINX_PID=$!
 
-DB_PATH=/data/memory.db node /app/graph-viewer/server.js &
+# Graph-viewer: heap limitado a 96MB (solo sirve el grafo)
+DB_PATH=/data/memory.db NODE_OPTIONS="--max-old-space-size=96" node /app/graph-viewer/server.js &
 GRAPH_PID=$!
 
+# mcp-proxy + memento: hereda NODE_OPTIONS del Dockerfile (256MB)
 mcp-proxy --port 8945 --host 0.0.0.0 -e MEMORY_DB_PATH "/data/memory.db" -- memento &
 MCP_PID=$!
 

@@ -93,7 +93,7 @@ function getGraphData() {
   if (!db || !db.open) {
     return { nodes: [], links: [] };
   }
-  return structuredClone(graphCache.data);
+  return graphCache.data;
 }
 
 app.get('/api/graph', function(req, res) {
