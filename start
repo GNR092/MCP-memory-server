@@ -10,7 +10,7 @@ if command -v sqlite3 &>/dev/null && [ -f /data/memory.db ]; then
   sqlite3 /data/memory.db "PRAGMA cache_size = -4000; PRAGMA mmap_size = 67108864;" 2>/dev/null || true
 fi
 
-nginx -g 'daemon off;' -g 'pid /tmp/nginx.pid;' &
+nginx -g 'daemon off;' &
 NGINX_PID=$!
 
 # Graph-viewer: heap limitado a 96MB (solo sirve el grafo)
@@ -18,7 +18,8 @@ DB_PATH=/data/memory.db NODE_OPTIONS="--max-old-space-size=96" node /app/graph-v
 GRAPH_PID=$!
 
 # mcp-proxy + memento: hereda NODE_OPTIONS del Dockerfile (256MB)
-mcp-proxy --port 8945 --host 0.0.0.0 -e MEMORY_DB_PATH "/data/memory.db" -- memento &
+# --pass-environment para que memento reciba TRANSFORMERS_CACHE y demás env vars.
+mcp-proxy --port 8945 --host 0.0.0.0 --pass-environment -- memento &
 MCP_PID=$!
 
 wait $MCP_PID

@@ -7,3 +7,4 @@ node_modules/
 memorydata/
 docker-compose.yml
 build.sh
+opencode.json
