@@ -15,7 +15,7 @@ RUN apt-get update && apt-get upgrade -y && \
     python3-pip \
     python3-dev \
     sqlite3 \
-    && npm install -g ./iachilles-memento-0.6.1.tgz \
+    && npm install -g ./gener-memento-minilm-0.6.1.tgz \
     && pip install --no-cache-dir --break-system-packages "mcp<2.0.0" "mcp-proxy==0.12.0"
 
 # Compilar dependencias del graph-viewer (necesita build-essential para better-sqlite3)
@@ -62,7 +62,7 @@ COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 # TRANSFORMERS_CACHE (directorio escribible por appuser en /data).
 RUN python3 - <<'PY'
 import pathlib
-km = pathlib.Path('/usr/local/lib/node_modules/@iachilles/memento/src/knowledge-graph-manager.js')
+km = pathlib.Path('/usr/local/lib/node_modules/@gener/memento-minilm/src/knowledge-graph-manager.js')
 text = km.read_text()
 text = text.replace(
     "import { pipeline } from '@xenova/transformers';",
