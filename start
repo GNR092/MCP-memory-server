@@ -13,11 +13,6 @@ if ! node /app/scripts/migrate-vectors.mjs; then
   exit 1
 fi
 
-# Optimizar SQLite: limitar cache a 4MB y mmap a 64MB
-if command -v sqlite3 &>/dev/null && [ -f /data/memory.db ]; then
-  sqlite3 /data/memory.db "PRAGMA cache_size = -4000; PRAGMA mmap_size = 67108864;" 2>/dev/null || true
-fi
-
 nginx -g 'daemon off;' &
 NGINX_PID=$!
 
@@ -30,4 +25,8 @@ GRAPH_PID=$!
 mcp-proxy --port 8945 --host 0.0.0.0 --pass-environment -- memento &
 MCP_PID=$!
 
-wait $MCP_PID
+# Si muere cualquiera de los tres, el contenedor se cae y Docker lo reinicia.
+wait -n
+echo "[ERROR] Un proceso del servidor terminó. Reiniciando contenedor."
+kill -TERM $NGINX_PID $MCP_PID $GRAPH_PID 2>/dev/null
+exit 1
