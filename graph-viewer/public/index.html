@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Memory Graph Viewer</title>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="vendor/alpine.min.js"></script>
+  <script src="vendor/d3.v7.min.js"></script>
+  <script src="vendor/tailwind.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -346,32 +346,12 @@
 
         enterFocusMode: function(nodeId) {
           Alpine.store('graphStore').focusedNodeId = nodeId;
-          if (!nodeId) {
-            this.applyFilters();
-            return;
-          }
-          var focusSet = new Set();
-          focusSet.add(nodeId);
-          var neighbors = app.adjacencyMap.get(nodeId) || new Set();
-          neighbors.forEach(function(n) { focusSet.add(n); });
-          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
-            if (focusSet.has(d.id)) return 1;
-            return 0.08;
-          });
-          app.g.select('.links').selectAll('line').style('opacity', function(d) {
-            var sid = typeof d.source === 'object' ? d.source.id : d.source;
-            var tid = typeof d.target === 'object' ? d.target.id : d.target;
-            if (focusSet.has(sid) && focusSet.has(tid)) return 0.8;
-            return 0.03;
-          });
+          this.applyHighlight(nodeId, true);
         },
 
         resetLayout: function() {
           Alpine.store('graphStore').focusedNodeId = null;
-          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
-            return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 0.1;
-          });
-          app.g.select('.links').selectAll('line').style('opacity', 0.6);
+          this.applyFilters();
           app.simulation.alpha(1).restart();
         },
 
@@ -411,50 +391,9 @@
           }
         },
 
-        applyHighlight: function(nodeId) {
-          if (!nodeId) {
-            app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
-return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 1;
-            });
-            app.g.select('.links').selectAll('line').style('opacity', 0.6);
-            return;
-          }
-          var neighbors = app.adjacencyMap.get(nodeId) || new Set();
-          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
-            if (d.id === nodeId || neighbors.has(d.id)) return 1;
-            return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 1;
-          });
-          app.g.select('.links').selectAll('line').style('opacity', function(d) {
-            var sid = typeof d.source === 'object' ? d.source.id : d.source;
-            var tid = typeof d.target === 'object' ? d.target.id : d.target;
-            return (sid === nodeId || tid === nodeId) ? 0.8 : 0.3;
-          });
-        },
-
-        applyFilters: function() {
-          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
-            if (Alpine.store('graphStore').focusedNodeId) {
-              if (d.id === Alpine.store('graphStore').focusedNodeId) return 1;
-              var neighbors = app.adjacencyMap.get(Alpine.store('graphStore').focusedNodeId) || new Set();
-              if (neighbors.has(d.id)) return 1;
-              return 1;
-            }
-            return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 0.1;
-          });
-          app.g.select('.links').selectAll('line').style('opacity', function(d) {
-            if (Alpine.store('graphStore').focusedNodeId) {
-              var sid = typeof d.source === 'object' ? d.source.id : d.source;
-              var tid = typeof d.target === 'object' ? d.target.id : d.target;
-              var neighbors = app.adjacencyMap.get(Alpine.store('graphStore').focusedNodeId) || new Set();
-              if (sid === Alpine.store('graphStore').focusedNodeId || tid === Alpine.store('graphStore').focusedNodeId) return 0.8;
-              if (neighbors.has(sid) && neighbors.has(tid)) return 0.6;
-              return 0.3;
-            }
-            return 0.6;
-          });
-        },
-
-        applyFocusMode: function(nodeId) {
+        // Resalta un nodo y sus vecinos. Con dimOthers=true el resto se atenua
+        // (modo foco); con false solo se marcan (resaltado al pasar el raton).
+        applyHighlight: function(nodeId, dimOthers) {
           if (!nodeId) {
             this.applyFilters();
             return;
@@ -465,13 +404,34 @@ return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 1;
           neighbors.forEach(function(n) { focusSet.add(n); });
           app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
             if (focusSet.has(d.id)) return 1;
-            return 0.08;
+            return dimOthers ? 0.08 : 1;
           });
           app.g.select('.links').selectAll('line').style('opacity', function(d) {
             var sid = typeof d.source === 'object' ? d.source.id : d.source;
             var tid = typeof d.target === 'object' ? d.target.id : d.target;
             if (focusSet.has(sid) && focusSet.has(tid)) return 0.8;
-            return 0.03;
+            return dimOthers ? 0.03 : 0.3;
+          });
+        },
+
+        applyFilters: function() {
+          var focusedId = Alpine.store('graphStore').focusedNodeId;
+          var neighbors = focusedId ? (app.adjacencyMap.get(focusedId) || new Set()) : new Set();
+          app.g.select('.nodes').selectAll('g').style('opacity', function(d) {
+            if (focusedId) {
+              return (d.id === focusedId || neighbors.has(d.id)) ? 1 : 0.08;
+            }
+            return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 0.1;
+          });
+          app.g.select('.links').selectAll('line').style('opacity', function(d) {
+            if (focusedId) {
+              var sid = typeof d.source === 'object' ? d.source.id : d.source;
+              var tid = typeof d.target === 'object' ? d.target.id : d.target;
+              if (sid === focusedId || tid === focusedId) return 0.8;
+              if (neighbors.has(sid) && neighbors.has(tid)) return 0.6;
+              return 0.3;
+            }
+            return 0.6;
           });
         },
 
@@ -571,7 +531,7 @@ return Alpine.store('graphStore').activeFilters.includes(d.group) ? 1 : 1;
           linkSel.exit().transition().duration(300).style('opacity', 0).remove();
           linkSel = linkSel.enter().append('line').attr('class', 'link').attr('stroke-width', 1).style('opacity', 0).merge(linkSel);
           if (Alpine.store('graphStore').focusedNodeId) {
-            this.applyFocusMode(Alpine.store('graphStore').focusedNodeId);
+            this.applyHighlight(Alpine.store('graphStore').focusedNodeId, true);
           } else {
             linkSel.transition().duration(300).style('opacity', 0.6);
           }
