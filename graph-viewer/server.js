@@ -1,17 +1,16 @@
 const express = require('express');
 const Database = require('better-sqlite3');
-const cors = require('cors');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3022;
+const HOST = process.env.HOST || '0.0.0.0';
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'memorydata', 'memory.db');
 const POLLING_INTERVAL = parseInt(process.env.POLLING_INTERVAL || '2000');
 const SSE_HEARTBEAT_INTERVAL = 25000;
 const APP_VERSION = process.env.APP_VERSION ||
   require(path.join(__dirname, '..', 'package.json')).version || '0.0.0';
 
-app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 let db;
@@ -37,8 +36,7 @@ try {
   try {
     db.exec(
       'CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_id);' +
-      'CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_id);' +
-      'CREATE INDEX IF NOT EXISTS idx_observations_entity ON observations(entity_id);'
+      'CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_id);'
     );
     console.log('[OK] Indices verified/created');
   } catch (idxErr) {
@@ -57,13 +55,15 @@ function getChecksum() {
   if (!db || !db.open) {
     return null;
   }
+  // data_version cambia cuando otra conexion (memento) escribe y es O(1);
+  // contar observaciones enteras es un escaneo completo cada 2 segundos.
+  const version = db.pragma('data_version', { simple: true });
   const result = db.prepare((
     "SELECT COUNT(*) as entity_count, " +
-    "(SELECT COUNT(*) FROM relations) as relation_count, " +
-    "(SELECT COUNT(*) FROM observations) as observation_count " +
+    "(SELECT COUNT(*) FROM relations) as relation_count " +
     "FROM entities"
   )).get();
-  return result.entity_count + '-' + result.relation_count + '-' + result.observation_count;
+  return version + '-' + result.entity_count + '-' + result.relation_count;
 }
 
 function buildGraphSnapshot() {
@@ -210,9 +210,9 @@ app.get('/api/force-refresh', function(req, res) {
   }
 });
 
-var server = app.listen(PORT, '0.0.0.0', function() {
+var server = app.listen(PORT, HOST, function() {
   console.log('[SERVER] MCP Memory Server v' + APP_VERSION);
-  console.log('[SERVER] Running on http://0.0.0.0:' + PORT);
+  console.log('[SERVER] Running on http://' + HOST + ':' + PORT);
   console.log('[SERVER] DB: ' + DB_PATH);
   console.log('[SERVER] Polling interval: ' + POLLING_INTERVAL + 'ms');
 });

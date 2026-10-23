@@ -5,8 +5,8 @@ FROM platformatic/node-caged:25-slim AS builder
 
 WORKDIR /build
 
-# Copiar tarball del motor de embeddings (instalación local, no desde npm)
-COPY *.tgz ./
+# El motor de embeddings vive en el repo (vendor/memento), no en un .tgz opaco.
+COPY vendor/memento/ ./vendor/memento/
 
 RUN apt-get update && apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
@@ -15,7 +15,8 @@ RUN apt-get update && apt-get upgrade -y && \
     python3-pip \
     python3-dev \
     sqlite3 \
-    && npm install -g ./gener-memento-minilm-0.6.1.tgz \
+    && npm pack --pack-destination /build ./vendor/memento \
+    && npm install -g /build/gener-memento-minilm-*.tgz \
     && pip install --no-cache-dir --break-system-packages "mcp<2.0.0" "mcp-proxy==0.12.0"
 
 # Compilar dependencias del graph-viewer (necesita build-essential para better-sqlite3)
@@ -36,7 +37,9 @@ FROM platformatic/node-caged:25-slim
 
 ENV NODE_OPTIONS="--max-old-space-size=256" \
     NODE_ENV=production \
-    TRANSFORMERS_CACHE=/data/.cache/transformers
+    MEMORY_DB_PATH=/data/memory.db \
+    TRANSFORMERS_CACHE=/data/.cache/transformers \
+    EMBEDDING_DIM=384
 
 # Parchear CVEs e instalar solo runtime deps
 RUN apt-get update && apt-get upgrade -y && \
@@ -57,23 +60,6 @@ RUN apt-get update && apt-get upgrade -y && \
 # Copiar binarios desde builder (COPY de directorio preserva symlinks)
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
-
-# Parchear memento para que el cache de modelos de transformers respete
-# TRANSFORMERS_CACHE (directorio escribible por appuser en /data).
-RUN python3 - <<'PY'
-import pathlib
-km = pathlib.Path('/usr/local/lib/node_modules/@gener/memento-minilm/src/knowledge-graph-manager.js')
-text = km.read_text()
-text = text.replace(
-    "import { pipeline } from '@xenova/transformers';",
-    """import { pipeline, env } from '@xenova/transformers';
-
-// Redirect model cache to a writable volume when running as non-root.
-if (process.env.TRANSFORMERS_CACHE) {
-    env.cacheDir = process.env.TRANSFORMERS_CACHE;
-}""")
-km.write_text(text)
-PY
 
 # Copiar paquetes pip (mcp-proxy y dependencias)
 COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
@@ -107,10 +93,11 @@ RUN groupadd -g ${GROUP_ID} appgroup \
 
 USER appuser
 
-HEALTHCHECK --interval=30s --timeout=6s --start-period=20s --retries=3 \
-  CMD timeout 5 python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8945/sse', timeout=4)" || exit 1
+HEALTHCHECK --interval=30s --timeout=6s --start-period=60s --retries=3 \
+  CMD timeout 5 python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/status', timeout=4)" || exit 1
 
-EXPOSE 8080 8945
+# Solo nginx se publica (8080). El MCP (8945) y el visor (3022) son internos.
+EXPOSE 8080
 
 VOLUME ["/data"]
 
