@@ -18,7 +18,8 @@ NGINX_PID=$!
 
 # mcp-proxy + memento: hereda NODE_OPTIONS del Dockerfile (256MB)
 # --pass-environment para que memento reciba TRANSFORMERS_CACHE y demás env vars.
-mcp-proxy --port 8945 --host 0.0.0.0 --pass-environment -- memento &
+# Solo escucha en localhost: dentro del contenedor solo nginx le habla.
+mcp-proxy --port 8945 --host 127.0.0.1 --pass-environment -- memento &
 MCP_PID=$!
 
 # El visor necesita que memento ya haya creado el esquema; si arranca antes,
@@ -31,7 +32,8 @@ for _ in {1..60}; do
 done
 
 # Graph-viewer: heap limitado a 96MB (solo sirve el grafo)
-DB_PATH=/data/memory.db NODE_OPTIONS="--max-old-space-size=96" node /app/graph-viewer/server.js &
+# Solo escucha en localhost: dentro del contenedor solo nginx le habla.
+DB_PATH=/data/memory.db HOST=127.0.0.1 NODE_OPTIONS="--max-old-space-size=96" node /app/graph-viewer/server.js &
 GRAPH_PID=$!
 
 # Si muere cualquiera de los tres, el contenedor se cae y Docker lo reinicia.

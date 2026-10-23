@@ -4,6 +4,7 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3022;
+const HOST = process.env.HOST || '0.0.0.0';
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'memorydata', 'memory.db');
 const POLLING_INTERVAL = parseInt(process.env.POLLING_INTERVAL || '2000');
 const SSE_HEARTBEAT_INTERVAL = 25000;
@@ -209,9 +210,9 @@ app.get('/api/force-refresh', function(req, res) {
   }
 });
 
-var server = app.listen(PORT, '0.0.0.0', function() {
+var server = app.listen(PORT, HOST, function() {
   console.log('[SERVER] MCP Memory Server v' + APP_VERSION);
-  console.log('[SERVER] Running on http://0.0.0.0:' + PORT);
+  console.log('[SERVER] Running on http://' + HOST + ':' + PORT);
   console.log('[SERVER] DB: ' + DB_PATH);
   console.log('[SERVER] Polling interval: ' + POLLING_INTERVAL + 'ms');
 });

@@ -96,7 +96,8 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=6s --start-period=60s --retries=3 \
   CMD timeout 5 python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/status', timeout=4)" || exit 1
 
-EXPOSE 8080 8945
+# Solo nginx se publica (8080). El MCP (8945) y el visor (3022) son internos.
+EXPOSE 8080
 
 VOLUME ["/data"]
 
