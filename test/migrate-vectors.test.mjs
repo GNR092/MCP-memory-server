@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'module';
-import { migrateVectors } from '../scripts/migrate-vectors.mjs';
+import { migrateVectors, cleanOrphanVectors } from '../scripts/migrate-vectors.mjs';
 
 const require = createRequire(import.meta.url);
 const { open } = require('sqlite');
@@ -89,6 +89,23 @@ test('crea obs_vec si no existe', async () => {
     assert.equal(result.action, 'created');
     const row = await db.get("SELECT sql FROM sqlite_master WHERE name = 'obs_vec'");
     assert.match(row.sql, /FLOAT\[384\]/);
+
+    await db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('limpia los vectores de entidades que ya no existen', async () => {
+    const { db, dbPath, dir } = await makeDb(NEW_DIM);
+    const insert = await db.prepare('INSERT INTO obs_vec(rowid, entity_id, embedding) VALUES (?, ?, ?)');
+    const vector = Buffer.from(new Float32Array(NEW_DIM).fill(0.1).buffer);
+    await insert.run(1, 1, vector);
+    await insert.run(2, 999, vector);
+    await insert.finalize();
+
+    const cleaned = await cleanOrphanVectors(db);
+
+    assert.equal(cleaned, 1);
+    assert.equal(Number((await db.get('SELECT COUNT(*) AS c FROM obs_vec')).c), 1);
 
     await db.close();
     fs.rmSync(dir, { recursive: true, force: true });

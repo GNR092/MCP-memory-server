@@ -16,14 +16,23 @@ fi
 nginx -g 'daemon off;' &
 NGINX_PID=$!
 
-# Graph-viewer: heap limitado a 96MB (solo sirve el grafo)
-DB_PATH=/data/memory.db NODE_OPTIONS="--max-old-space-size=96" node /app/graph-viewer/server.js &
-GRAPH_PID=$!
-
 # mcp-proxy + memento: hereda NODE_OPTIONS del Dockerfile (256MB)
 # --pass-environment para que memento reciba TRANSFORMERS_CACHE y demás env vars.
 mcp-proxy --port 8945 --host 0.0.0.0 --pass-environment -- memento &
 MCP_PID=$!
+
+# El visor necesita que memento ya haya creado el esquema; si arranca antes,
+# muere con "no such table: entities" y se lleva el contenedor contigo.
+for _ in {1..60}; do
+  if sqlite3 -readonly /data/memory.db "SELECT 1 FROM sqlite_master WHERE type='table' AND name='entities'" 2>/dev/null | grep -q 1; then
+    break
+  fi
+  sleep 1
+done
+
+# Graph-viewer: heap limitado a 96MB (solo sirve el grafo)
+DB_PATH=/data/memory.db NODE_OPTIONS="--max-old-space-size=96" node /app/graph-viewer/server.js &
+GRAPH_PID=$!
 
 # Si muere cualquiera de los tres, el contenedor se cae y Docker lo reinicia.
 wait -n

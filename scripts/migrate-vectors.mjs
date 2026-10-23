@@ -40,6 +40,36 @@ export async function currentDim(db) {
 }
 
 /**
+ * Borra los vectores de entidades que ya no existen. vec0 no tiene cascada, así
+ * que un delete deja vectores sueltos que ocupan los huecos del LIMIT en la
+ * busqueda y devuelven observaciones borradas.
+ * @param {import('sqlite').Database} db
+ * @returns {Promise<number>} Cuántos vectores huerfanos se borraron.
+ */
+export async function cleanOrphanVectors(db) {
+    // En una base nueva memento aún no creó el esquema: no hay contra qué comparar.
+    const schema = await db.get(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'entities'"
+    );
+    if (!schema) {
+        return 0;
+    }
+    const vectors = await db.all('SELECT entity_id FROM obs_vec');
+    const entities = await db.all('SELECT id FROM entities');
+    const live = new Set(entities.map(entity => Number(entity.id)));
+    const orphans = [
+        ...new Set(vectors.map(vector => Number(vector.entity_id)).filter(id => !live.has(id)))
+    ];
+    if (!orphans.length) {
+        return 0;
+    }
+    const placeholders = orphans.map(() => '?').join(',');
+    const result = await db.run(`DELETE FROM obs_vec WHERE entity_id IN (${placeholders})`, orphans);
+    // changes = filas borradas (varias por entidad huérfana); el fallback es por si el driver no lo reporta.
+    return Number(result.changes ?? orphans.length);
+}
+
+/**
  * Reconstruye obs_vec con la dimensión esperada.
  * @param {object} options
  * @param {import('sqlite').Database} options.db Conexión SQLite abierta.
@@ -159,6 +189,10 @@ async function main() {
     log(`obs_vec=${fromDim === null ? 'no existe' : fromDim + ' dims'}`);
 
     if (fromDim === EMBEDDING_DIM) {
+        const cleaned = await cleanOrphanVectors(db);
+        if (cleaned) {
+            log(`limpiados ${cleaned} vectores huerfanos`);
+        }
         log('sin cambios');
         await db.close();
         return;
@@ -182,6 +216,10 @@ async function main() {
     } else if (result.action === 'migrated') {
         log(`backup: ${result.backupPath}`);
         log(`migración OK: ${result.count} vectores de ${probe.length} dims`);
+    }
+    const cleaned = await cleanOrphanVectors(db);
+    if (cleaned) {
+        log(`limpiados ${cleaned} vectores huerfanos`);
     }
     await db.close();
 }
