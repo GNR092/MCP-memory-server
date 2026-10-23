@@ -1,37 +1,61 @@
 # MCP Memory Server
 
-Servidor MCP de memoria persistente construido con Memento.
+Servidor MCP de memoria persistente. Guarda entidades, observaciones y relaciones en un
+archivo SQLite, con vectores para buscar por significado usando **MiniLM-L6-v2** (384 dims).
 
 ## Requisitos
 
-- Node.js 18+
+- Node.js 18+ (para los tests)
 - Docker y Docker Compose
 
-## Instalación
+## Estructura
 
-```bash
-npm install
-```
+| Ruta | Qué es |
+|------|--------|
+| `vendor/memento/` | Código del servidor MCP de memoria (MiniLM). Se empaqueta en la imagen. |
+| `scripts/migrate-vectors.mjs` | Se ejecuta al arrancar: si el índice de vectores es de otra dimensión, hace backup con fecha/hora y lo reconstruye. |
+| `graph-viewer/` | Visor del grafo en Express (interfaz web). |
+| `memorydata/` | Datos: `memory.db` y la caché del modelo. Montado como `/data`. |
 
 ## Uso con Docker
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-## Uso local
+El MCP queda en `http://localhost:8888/sse` y el visor del grafo en `http://localhost:8888/graph/`.
+
+El puerto **no tiene autenticación** y por eso solo escucha en `127.0.0.1`. Para entrar
+desde otro equipo usa un túnel SSH:
 
 ```bash
-./start
+ssh -L 8888:localhost:8888 usuario@servidor
+```
+
+## Tests
+
+```bash
+npm install
+npm test
 ```
 
 ## Configuración
 
-La base de datos se guarda en `/data/memory.db` dentro del contenedor.
+| Variable | Por defecto | Para qué |
+|----------|-------------|----------|
+| `MEMORY_DB_PATH` | `/data/memory.db` | Ruta de la base de datos. |
+| `TRANSFORMERS_CACHE` | `/data/.cache/transformers` | Dónde se guarda el modelo. |
+| `EMBEDDING_DIM` | `384` | Dimensión de los vectores. Debe coincidir con el modelo. |
+| `VERSION` | `1.3.4` | Versión que se graba en la imagen. |
 
-## Notas
+La base de datos se guarda en `/data/memory.db` dentro del contenedor (`./memorydata` en el host).
 
-- `docker-compose.yml` está excluido del control de versiones por contener configuración sensible de despliegue.
+## Migración del índice de vectores
+
+Al arrancar, `scripts/migrate-vectors.mjs` compara la dimensión de la tabla `obs_vec` con
+la del modelo. Si no coinciden (por ejemplo, una base creada con BGE-M3 de 1024 dims),
+hace un backup `memory.db.bak-<fecha-hora>-<dim>d` y reconstruye el índice re-embebiendo
+las observaciones. Si la migración falla, el contenedor no arranca.
 
 ## Autor
 
