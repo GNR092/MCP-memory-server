@@ -5,6 +5,14 @@ echo "================================================"
 
 trap 'kill -TERM $NGINX_PID $MCP_PID $GRAPH_PID 2>/dev/null; exit' SIGTERM SIGINT
 
+# Si la DB trae vectores de otra dimensión (p. ej. bge-m3 1024 vs MiniLM 384),
+# hace backup con fecha/hora y reconstruye obs_vec antes de arrancar.
+echo "Verificando índice vectorial..."
+if ! node /app/scripts/migrate-vectors.mjs; then
+  echo "[ERROR] No se pudo verificar/migrar el índice vectorial. Abortando."
+  exit 1
+fi
+
 # Optimizar SQLite: limitar cache a 4MB y mmap a 64MB
 if command -v sqlite3 &>/dev/null && [ -f /data/memory.db ]; then
   sqlite3 /data/memory.db "PRAGMA cache_size = -4000; PRAGMA mmap_size = 67108864;" 2>/dev/null || true

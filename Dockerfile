@@ -88,6 +88,7 @@ ENV APP_VERSION=$VERSION
 WORKDIR /app
 
 COPY start nginx.conf ./
+COPY scripts/ ./scripts/
 
 RUN chmod +x start \
     && ln -s /app/nginx.conf /etc/nginx/sites-enabled/graph-viewer
