@@ -46,7 +46,7 @@ npm test
 | `MEMORY_DB_PATH` | `/data/memory.db` | Ruta de la base de datos. |
 | `TRANSFORMERS_CACHE` | `/data/.cache/transformers` | Dónde se guarda el modelo. |
 | `EMBEDDING_DIM` | `384` | Dimensión de los vectores. Debe coincidir con el modelo. |
-| `VERSION` | `1.3.4` | Versión que se graba en la imagen. |
+| `VERSION` | `2.0.1` | Versión que se graba en la imagen. |
 
 La base de datos se guarda en `/data/memory.db` dentro del contenedor (`./memorydata` en el host).
 

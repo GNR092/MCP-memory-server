@@ -1,6 +1,6 @@
 {
   "name": "memory",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "MCP memory server",
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\""
