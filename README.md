@@ -57,6 +57,13 @@ la del modelo. Si no coinciden (por ejemplo, una base creada con BGE-M3 de 1024 
 hace un backup `memory.db.bak-<fecha-hora>-<dim>d` y reconstruye el índice re-embebiendo
 las observaciones. Si la migración falla, el contenedor no arranca.
 
+## Búsqueda de memoria
+
+`search_nodes` combina similitud semántica con coincidencias de texto completo
+(FTS5) y devuelve fragmentos breves. `open_nodes` devuelve hasta 10 observaciones
+por entidad; usa `observationOffset` para pedir la página siguiente y
+`observationLimit` para ajustar el tamaño (máximo 100).
+
 ## Autor
 
 - **Gener Can Dzul** - [GNR092](https://github.com/GNR092)

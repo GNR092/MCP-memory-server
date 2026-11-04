@@ -167,7 +167,7 @@ export class Server extends McpServer {
         // Tool: search_nodes
         this.tool(
             'search_nodes',
-            'Search for entities and relations by semantic similarity.',
+            'Search by meaning and matching text. Returns short matching snippets; use open_nodes for more observations.',
             {
                 query:     z.string().describe('Search query string.'),
                 topK:      z.number().int().min(1).max(100)
@@ -192,15 +192,19 @@ export class Server extends McpServer {
         // Tool: open_nodes
         this.tool(
             'open_nodes',
-            'Expand specified entities: return their full details including observations and relations.',
+            'Expand specified entities. Observations are returned in pages; use the next offset to continue.',
             {
-                names: z.array(z.string()).describe('Names of entities to expand.')
+                names: z.array(z.string()).describe('Names of entities to expand.'),
+                observationLimit: z.number().int().min(1).max(100).optional().default(10)
+                    .describe('Observations per entity to return.'),
+                observationOffset: z.number().int().min(0).optional().default(0)
+                    .describe('Zero-based observation offset for the next page.')
             },
-            async ({ names }) => ({
+            async ({ names, observationLimit, observationOffset }) => ({
                 content: [{
                     type: 'text',
                     text: JSON.stringify(
-                        await this.#knowledgeGraphManager.openNodes(names)
+                        await this.#knowledgeGraphManager.openNodes(names, { observationLimit, observationOffset })
                     )
                 }]
             })

@@ -184,17 +184,30 @@ export class KnowledgeGraphManager {
             const unitVector = normalizeVector(rawVector);
             const limit = Math.max(topK * 2, topK + 5);
             const rows = await this.#repository.semanticSearch(unitVector, limit);
-
-            const ids = rows
+            const semanticRows = rows
                 .filter(r => Number(r.similarity) >= Number(threshold))
-                .slice(0, topK)
-                .map(r => r.entity_id);
+                .filter((row, index, all) => all.findIndex(other => other.entity_id === row.entity_id) === index)
+                .slice(0, topK);
+            const lexicalRows = await this.#repository.searchObservations(query, topK);
+            const semanticIds = semanticRows.map(row => row.entity_id);
+            const lexicalIds = lexicalRows.map(row => Number(row.entity_id));
+            const lexicalOnly = [...new Set(lexicalIds)].filter(id => !semanticIds.includes(id));
+            const ids = [...semanticIds.slice(0, Math.max(0, topK - lexicalOnly.length)), ...lexicalOnly.slice(0, topK)];
+
+            const matchedByEntity = new Map(lexicalRows.map(row => [Number(row.entity_id), row.content]));
+            const selectedSemanticIds = semanticRows
+                .filter(row => ids.includes(row.entity_id))
+                .map(row => row.observation_id);
+            const semanticObservations = await this.#repository.getObservationsByIds(selectedSemanticIds);
+            for (const row of semanticObservations) {
+                if (!matchedByEntity.has(Number(row.entity_id))) matchedByEntity.set(Number(row.entity_id), row.content);
+            }
 
             if (!ids.length) {
                 return { entities: [], relations: [] }
             }
 
-            return this.#applyScoring(ids, query, includeScoreDetails, scoringProfile);
+            return this.#applyScoring(ids, query, includeScoreDetails, scoringProfile, matchedByEntity, new Set(semanticIds));
 
         } catch (error) {
             console.error(`Search error:`, error?.message ?? error);
@@ -228,8 +241,8 @@ export class KnowledgeGraphManager {
      * @returns {Promise<{entities: Array<{name: string, entityType: string, observations: string[]}>, relations: Array<{from: string, to: string, relationType: string}>}>}
      *   Object containing specified entities with observations and their relations.
      */
-    async openNodes(names) {
-        return this.#repository.openNodes(names);
+    async openNodes(names, options) {
+        return this.#repository.openNodes(names, options);
     }
 
     /**
@@ -263,7 +276,7 @@ export class KnowledgeGraphManager {
      * @returns {Promise<{entities: Array, relations: Array}>}
      *   Scored and sorted results with entities and relations.
      */
-    async #applyScoring(entityIds, query, includeScoreDetails, scoringProfile) {
+    async #applyScoring(entityIds, query, includeScoreDetails, scoringProfile, matchedByEntity, semanticIds) {
         if (!entityIds?.length) {
             return { entities: [], relations: [] };
         }
@@ -278,18 +291,34 @@ export class KnowledgeGraphManager {
             scoringProfile
         });
         scored.sort((a, b) => (b.score || 0) - (a.score || 0));
-        const foundIds = scored.map(row => Number(row.entity_id));
+        const lexicalOrder = entityIds.filter(id => !semanticIds.has(Number(id)));
+        const byId = new Map(scored.map(row => [Number(row.entity_id), row]));
+        const semanticOrder = scored.filter(row => semanticIds.has(Number(row.entity_id)));
+        const ordered = semanticOrder.concat(lexicalOrder.map(id => byId.get(Number(id))).filter(Boolean));
+        const foundIds = ordered.map(row => Number(row.entity_id));
 
         if (foundIds.length) {
             await this.#searchContextManager.updateAccessStats(foundIds);
         }
 
-        const entityNames = scored.map(row => row.name);
-        const fullDetails = await this.openNodes(entityNames);
+        const entityNames = ordered.map(row => row.name);
+        const fullDetails = await this.openNodes(entityNames, { observationLimit: 1, observationOffset: 0 });
+        const detailsByName = new Map(fullDetails.entities.map(entity => [entity.name, entity]));
+        const compactEntities = ordered.map(row => {
+            const details = detailsByName.get(row.name);
+            const content = matchedByEntity.get(Number(row.entity_id)) || details?.observations[0] || '';
+            return {
+                name: row.name,
+                entityType: row.entityType,
+                observations: content ? [content.length > 280 ? `${content.slice(0, 277)}...` : content] : [],
+                observationCount: details?.observationCount || 0,
+                nextObservationOffset: details?.nextObservationOffset ?? null
+            };
+        });
 
         if (includeScoreDetails) {
-            const scoreByName = new Map(scored.map(row => [row.name, row]));
-            const withScores = fullDetails.entities.map(entity => ({
+            const scoreByName = new Map(ordered.map(row => [row.name, row]));
+            const withScores = compactEntities.map(entity => ({
                 ...entity,
                 score: scoreByName.get(entity.name)?.score,
                 scoreComponents: scoreByName.get(entity.name)?.scoreComponents
@@ -297,7 +326,7 @@ export class KnowledgeGraphManager {
             return { entities: withScores, relations: fullDetails.relations };
         }
 
-        return fullDetails;
+        return { entities: compactEntities, relations: fullDetails.relations };
     }
 
     /**

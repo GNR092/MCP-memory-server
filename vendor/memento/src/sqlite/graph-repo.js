@@ -315,7 +315,7 @@ export class SqliteGraphRepository {
         const bufVec = this.#float32BufferFromArray(unitVector);
 
         const rows = await this.db.all(
-            `SELECT entity_id, vec_distance_L2(embedding, ?) AS distance
+            `SELECT rowid AS observation_id, entity_id, vec_distance_L2(embedding, ?) AS distance
                  FROM obs_vec
                  WHERE embedding IS NOT NULL
                  ORDER BY distance
@@ -328,11 +328,40 @@ export class SqliteGraphRepository {
             const similarity = 1 - (d * d) / 2
 
             return {
+                observation_id: Number(r.observation_id),
                 entity_id: Number(r.entity_id),
                 distance: d,
                 similarity
             }
         });
+    }
+
+    async searchObservations(query, limit) {
+        const terms = [...new Set(query.normalize('NFKC').match(/[\p{L}\p{N}]+/gu) || [])];
+        if (!terms.length) return [];
+        const match = terms.map(term => `"${term.replace(/"/g, '""')}"`).join(' AND ');
+        return this.db.all(
+            `WITH hits AS (
+                SELECT rowid AS observation_id, entity_id, content, bm25(obs_fts) AS rank
+                 FROM obs_fts WHERE obs_fts MATCH ?
+             ), ranked AS (
+                SELECT observation_id, entity_id, content, rank,
+                       ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY rank) AS entity_rank
+                FROM hits
+             )
+             SELECT observation_id, entity_id, content, rank FROM ranked
+             WHERE entity_rank = 1 ORDER BY rank LIMIT ?`,
+            [match, limit]
+        );
+    }
+
+    async getObservationsByIds(ids) {
+        if (!ids.length) return [];
+        const placeholders = ids.map(() => '?').join(',');
+        return this.db.all(
+            `SELECT id AS observation_id, entity_id, content FROM observations WHERE id IN (${placeholders})`,
+            ids
+        );
     }
 
     /**
@@ -383,7 +412,7 @@ export class SqliteGraphRepository {
      * @returns {Promise<{entities: Array<{name: string, entityType: string, observations: string[]}>, relations: Array<{from: string, to: string, relationType: string}>}>}
      *   Object containing specified entities with observations and relations between them.
      */
-    async openNodes(names) {
+    async openNodes(names, { observationLimit = 10, observationOffset = 0 } = {}) {
         if (!names.length) {
             return { entities: [], relations: [] };
         }
@@ -406,10 +435,23 @@ export class SqliteGraphRepository {
 
         const ids = entities.map(e => e.id);
         const idPlaceholders = ids.map(() => '?').join(',');
+        const limit = Math.max(0, Number.isInteger(observationLimit) ? observationLimit : 10);
+        const offset = Math.max(0, Number.isInteger(observationOffset) ? observationOffset : 0);
         const observations = await this.db.all(
-            `SELECT entity_id, content FROM observations WHERE entity_id IN (${idPlaceholders})`,
+            `WITH page AS (
+                SELECT entity_id, content,
+                       ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY id) AS row_number
+                 FROM observations WHERE entity_id IN (${idPlaceholders})
+             )
+             SELECT entity_id, content FROM page
+             WHERE row_number > ? AND row_number <= ? ORDER BY entity_id, row_number`,
+            [...ids, offset, offset + limit]
+        );
+        const counts = await this.db.all(
+            `SELECT entity_id, COUNT(*) AS total FROM observations WHERE entity_id IN (${idPlaceholders}) GROUP BY entity_id`,
             ids
         );
+        const totalByEntity = new Map(counts.map(row => [row.entity_id, Number(row.total)]));
         /**
          *
          * @type {[{from_name, to_name, relationType}]}
@@ -437,7 +479,11 @@ export class SqliteGraphRepository {
             entities: entities.map(entity => ({
                 name: entity.name,
                 entityType: entity.entityType,
-                observations: observationsByEntity.get(entity.id) || []
+                observations: observationsByEntity.get(entity.id) || [],
+                observationCount: totalByEntity.get(entity.id) || 0,
+                nextObservationOffset: offset + limit < (totalByEntity.get(entity.id) || 0)
+                    ? offset + limit
+                    : null
             })),
             relations: relations.map(relation => ({
                 from: relation.from_name,

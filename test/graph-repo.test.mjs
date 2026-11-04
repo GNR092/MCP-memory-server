@@ -96,3 +96,22 @@ test('openNodes devuelve las entidades en el orden pedido', async () => {
     await db.close();
     fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('openNodes pagina observaciones por entidad', async () => {
+    const { db, repo, dir } = await makeRepo();
+    const firstId = await repo.createEntity('primero', 'tipo');
+    const secondId = await repo.createEntity('segundo', 'tipo');
+    await repo.insertObservation(firstId, 'uno');
+    await repo.insertObservation(firstId, 'dos');
+    await repo.insertObservation(firstId, 'tres');
+    await repo.insertObservation(secondId, 'otro');
+
+    const page = await repo.openNodes(['primero', 'segundo'], { observationLimit: 2, observationOffset: 1 });
+
+    assert.deepEqual(page.entities.map(entity => entity.observations), [['dos', 'tres'], []]);
+    assert.deepEqual(page.entities.map(entity => entity.observationCount), [3, 1]);
+    assert.deepEqual(page.entities.map(entity => entity.nextObservationOffset), [null, null]);
+
+    await db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+});

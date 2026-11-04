@@ -26,6 +26,10 @@ el backup y la reconstrucción al arrancar.
 `delete_relations`, `delete_observations`, `read_graph`, `search_nodes`, `open_nodes`,
 `set_importance`.
 
+`search_nodes` combines semantic and FTS5 text search and returns short matching
+snippets. `open_nodes` returns up to 10 observations per entity by default; use
+`observationOffset` and `observationLimit` to fetch further pages (maximum 100).
+
 ## Licencia
 
 MIT (heredada del proyecto original).
