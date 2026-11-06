@@ -30,6 +30,23 @@ el backup y la reconstrucción al arrancar.
 snippets. `open_nodes` returns up to 10 observations per entity by default; use
 `observationOffset` and `observationLimit` to fetch further pages (maximum 100).
 
+`search_nodes.threshold` is a maximum L2 distance in `[0, 2]` between normalized
+embedding directions. For finite, non-zero vectors of compatible dimensions,
+`c = vec_distance_cosine(query, stored)` and `d_unit = sqrt(2*c)`; a semantic hit is
+accepted when `c <= threshold^2/2`. Different vector magnitudes with the same
+direction therefore have distance 0. This is a breaking beta change: the public MCP
+default changes from `0.35` to `0.75`, and `threshold` denotes maximum distance rather
+than minimum similarity. For unit vectors, `0.75` corresponds to
+`cosine_min = 1 - 0.75^2/2 = 0.71875`. The manager default is also `0.75`, and the
+schema accepts `[0, 2]`. The compatibility alternative `1.140175` corresponds to a
+minimum cosine similarity of `0.35`. FTS5 matches are unaffected by the semantic
+threshold.
+
+The deterministic 54-pair benchmark is a limited synthetic geometry exercise, not a
+real linguistic corpus or evidence of net quality improvement; its FTS labels are not
+real BM25 measurements. Recalibrate with a real linguistic corpus before drawing
+quality conclusions.
+
 ## Licencia
 
 MIT (heredada del proyecto original).

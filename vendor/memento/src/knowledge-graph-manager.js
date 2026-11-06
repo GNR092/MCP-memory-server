@@ -8,9 +8,30 @@
 import { pipeline, env } from '@xenova/transformers';
 import { SearchContextManager } from './search-context-manager.js';
 
+const EMBEDDING_DIM = Number.parseInt(process.env.EMBEDDING_DIM || '384', 10);
+
 // Redirect model cache to a writable volume when running as non-root.
 if (process.env.TRANSFORMERS_CACHE) {
     env.cacheDir = process.env.TRANSFORMERS_CACHE;
+}
+
+function vectorFromBuffer(buffer) {
+    if (!Buffer.isBuffer(buffer) || buffer.byteOffset % Float32Array.BYTES_PER_ELEMENT !== 0 ||
+        !Number.isInteger(EMBEDDING_DIM) || EMBEDDING_DIM <= 0 ||
+        buffer.byteLength !== EMBEDDING_DIM * Float32Array.BYTES_PER_ELEMENT) return null;
+
+    const vector = Array.from(new Float32Array(buffer.buffer, buffer.byteOffset, EMBEDDING_DIM));
+    let normSquared = 0;
+    for (const value of vector) {
+        if (!Number.isFinite(value)) return null;
+        normSquared += value * value;
+    }
+    return Number.isFinite(normSquared) && normSquared > 0 ? vector : null;
+}
+
+function normalizeVector(vector) {
+    const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+    return vector.map(value => value / norm);
 }
 
 export class KnowledgeGraphManager {
@@ -79,11 +100,9 @@ export class KnowledgeGraphManager {
             }
             if (inserted.length) {
                 const embeddings = await this.embedTexts(inserted.map(row => row.content));
-                const vectorRows = inserted.map((row, index) => ({
-                    observationId: row.observationId,
-                    entityId,
-                    embedding: embeddings[index]
-                }));
+                const vectorRows = inserted.flatMap((row, index) => vectorFromBuffer(embeddings[index])
+                    ? [{ observationId: row.observationId, entityId, embedding: embeddings[index] }]
+                    : []);
                 await this.#repository.insertObservationVectors(vectorRows);
             }
             results.push({ entityName, addedObservations: inserted.map(item => item.content) });
@@ -164,7 +183,7 @@ export class KnowledgeGraphManager {
      * @param {object} options - Search configuration options.
      * @param {string} options.query - Search query string.
      * @param {number} [options.topK=10] - Maximum number of results to return.
-     * @param {number} [options.threshold=0.75] - Threshold
+     * @param {number} [options.threshold=0.75] - Maximum L2 distance for semantic results.
      * @param {boolean} [options.includeScoreDetails=false] - Include score components in results.
      * @param {string} [options.scoringProfile='balanced'] - Scoring profile to use.
      * @returns {Promise<{entities: Array, relations: Array}>}
@@ -179,16 +198,32 @@ export class KnowledgeGraphManager {
                       }) {
 
         try {
-            const [ rawVectorBuf ] = await this.embedTexts([ query ]);
-            const rawVector = Array.from(new Float32Array(rawVectorBuf.buffer, rawVectorBuf.byteOffset, rawVectorBuf.byteLength / 4));
-            const unitVector = normalizeVector(rawVector);
-            const limit = Math.max(topK * 2, topK + 5);
-            const rows = await this.#repository.semanticSearch(unitVector, limit);
-            const semanticRows = rows
-                .filter(r => Number(r.similarity) >= Number(threshold))
-                .filter((row, index, all) => all.findIndex(other => other.entity_id === row.entity_id) === index)
-                .slice(0, topK);
             const lexicalRows = await this.#repository.searchObservations(query, topK);
+            let semanticRows = [];
+            const limit = Math.max(topK * 2, topK + 5);
+            if (Number.isFinite(threshold) && threshold >= 0 && threshold <= 2) {
+                try {
+                    const [rawVectorBuf] = await this.embedTexts([query]);
+                    const rawVector = vectorFromBuffer(rawVectorBuf);
+                    if (rawVector) {
+                        const rows = await this.#repository.semanticSearch(normalizeVector(rawVector), limit, threshold);
+                        const maxCosineDistance = threshold ** 2 / 2;
+                        semanticRows = rows
+                            .filter(row => row?.cosineDistance !== null && row?.cosineDistance !== undefined &&
+                                row?.distance !== null && row?.distance !== undefined)
+                            .filter(row => {
+                                const cosineDistance = Number(row.cosineDistance);
+                                const distance = Number(row.distance);
+                                return Number.isFinite(cosineDistance) && cosineDistance >= 0 &&
+                                    cosineDistance <= maxCosineDistance && Number.isFinite(distance);
+                            })
+                            .filter((row, index, all) => all.findIndex(other => other.entity_id === row.entity_id) === index)
+                            .slice(0, topK);
+                    }
+                } catch {
+                    // Keep exact-text matches when embedding or vector search is unavailable.
+                }
+            }
             const semanticIds = semanticRows.map(row => row.entity_id);
             const lexicalIds = lexicalRows.map(row => Number(row.entity_id));
             const lexicalOnly = [...new Set(lexicalIds)].filter(id => !semanticIds.includes(id));
@@ -213,24 +248,6 @@ export class KnowledgeGraphManager {
             console.error(`Search error:`, error?.message ?? error);
 
             throw error;
-        }
-
-        function normalizeVector(v) {
-            let sum = 0;
-            for (let i = 0; i < v.length; i += 1) {
-                sum += v[i] * v[i];
-            }
-            const norm = Math.sqrt(sum)
-            if (!isFinite(norm) || norm === 0) {
-                return v;
-            }
-
-            const out = new Array(v.length)
-            for (let i = 0; i < v.length; i += 1) {
-                out[i] = v[i] / norm;
-            }
-
-            return out;
         }
     }
 

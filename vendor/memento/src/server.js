@@ -174,10 +174,10 @@ export class Server extends McpServer {
                                .optional()
                                .default(8)
                                .describe('Max number of results to return.'),
-                threshold: z.number().min(0).max(1)
+                threshold: z.number().min(0).max(2)
                                .optional()
-                               .default(0.35)
-                               .describe('Distance threshold for semantic filtering.')
+                               .default(0.75)
+                               .describe('Maximum L2 distance between normalized embedding directions (0–2); FTS5 matches are unaffected.')
             },
             async (args) => ({
                 content: [{

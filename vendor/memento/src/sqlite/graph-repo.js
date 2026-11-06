@@ -302,37 +302,59 @@ export class SqliteGraphRepository {
     /**
      * Performs semantic search using vector similarity.
      * @async
-     * @param {number[]} unitVector - Embedding vector as Buffer.
+     * @param {number[]} unitVector - Finite, non-zero query embedding.
      * @param {number} topK - Maximum number of results to return.
-     * @returns {Promise<Array<{entity_id: number, distance: number}>>}
-     *   Array of entity IDs with their L2 distances.
+     * @param {number} [threshold=2] - Maximum equivalent unit-vector L2 distance.
+     * @returns {Promise<Array<{observation_id: number, entity_id: number, cosineDistance: number, distance: number, similarity: number}>>}
+     *   Valid observations ranked by cosine distance, with equivalent unit-vector L2 distance.
      */
-    // shortcut: sqlite-vec 0.1.7 no tiene indice aproximado, asi que cada
-    // busqueda calcula la distancia de todos los vectores (O(n)). Con menos de
-    // ~50.000 observaciones es instantaneo; si se pasa de ahi, cambiar a una
-    // version de sqlite-vec con particiones o filtrar antes por texto.
-    async semanticSearch(unitVector, topK) {
+    // shortcut: this exact scalar scan is O(n); revisit with larger corpora or a measured candidate filter.
+    async semanticSearch(unitVector, topK, threshold = 2) {
+        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 2 ||
+            !Array.isArray(unitVector) || !unitVector.length ||
+            unitVector.some(value => !Number.isFinite(value)) ||
+            unitVector.every(value => value === 0)) return [];
+
         const bufVec = this.#float32BufferFromArray(unitVector);
 
         const rows = await this.db.all(
-            `SELECT rowid AS observation_id, entity_id, vec_distance_L2(embedding, ?) AS distance
-                 FROM obs_vec
-                 WHERE embedding IS NOT NULL
-                 ORDER BY distance
-                 LIMIT ?`,
-            [ bufVec, topK ]
+            `WITH scored AS (
+                SELECT rowid AS observation_id, entity_id,
+                       -- For unit directions, cosine distance c corresponds to L2 distance sqrt(2*c).
+                       vec_distance_cosine(embedding, ?) AS cosine_distance
+                FROM obs_vec
+                WHERE embedding IS NOT NULL
+                  AND length(embedding) = ?
+            ), valid AS (
+                SELECT observation_id, entity_id, cosine_distance,
+                       sqrt(2.0 * cosine_distance) AS distance
+                FROM scored
+                WHERE cosine_distance IS NOT NULL
+                  AND cosine_distance >= 0
+                  AND cosine_distance <= 2
+            )
+             SELECT observation_id, entity_id, cosine_distance, distance
+             FROM valid
+             WHERE cosine_distance <= ?
+             ORDER BY cosine_distance
+             LIMIT ?`,
+            [ bufVec, unitVector.length * Float32Array.BYTES_PER_ELEMENT, threshold ** 2 / 2, topK ]
         );
 
-        return rows.map(r => {
-            const d = Number(r.distance)
-            const similarity = 1 - (d * d) / 2
-
-            return {
-                observation_id: Number(r.observation_id),
-                entity_id: Number(r.entity_id),
-                distance: d,
-                similarity
-            }
+        return rows.flatMap(row => {
+            if (row.cosine_distance === null || row.cosine_distance === undefined ||
+                row.distance === null || row.distance === undefined) return [];
+            const cosineDistance = Number(row.cosine_distance);
+            const distance = Number(row.distance);
+            if (!Number.isFinite(cosineDistance) || !Number.isFinite(distance) ||
+                cosineDistance < 0 || cosineDistance > 2) return [];
+            return [{
+                observation_id: Number(row.observation_id),
+                entity_id: Number(row.entity_id),
+                cosineDistance,
+                distance,
+                similarity: 1 - cosineDistance
+            }];
         });
     }
 

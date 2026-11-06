@@ -29,7 +29,7 @@
  * @property {(relations: Array<{ from: string, to: string, relationType: string }>) => Promise<void>} deleteRelations
  * @property {(entityId: number|string, observations: string[]) => Promise<void>} deleteObservations
  * @property {() => Promise<{ entities: Array<{ name: string, entityType: string, observations: string[] }>, relations: Array<{ from: string, to: string, relationType: string }> }>} readGraph
- * @property {(vector: number[], topK: number) => Promise<Array<{ entity_id: number|string, distance: number }>>} semanticSearch
+ * @property {(vector: number[], topK: number, threshold?: number) => Promise<Array<{ observation_id: number|string, entity_id: number|string, distance: number, cosineDistance: number, similarity: number }>>} semanticSearch
  * @property {(entityIds: Array<number|string>) => Promise<Array<{ entity_id: number|string, name: string, entityType: string, created_at: string|null, last_accessed: string|null, access_count: number|null, importance: string|null }>>} fetchEntitiesWithDetails
  * @property {(names: string[]) => Promise<{ entities: Array<{ name: string, entityType: string, observations: string[] }>, relations: Array<{ from: string, to: string, relationType: string }> }>} openNodes
  * @property {(names: string[]) => Promise<Map<string, string>>} getEntityIdsByNames

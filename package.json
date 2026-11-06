@@ -3,11 +3,12 @@
   "version": "2.0.2-beta.1",
   "description": "MCP memory server",
   "scripts": {
-    "test": "node --test \"test/**/*.test.mjs\""
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "benchmark:hybrid-search": "node scripts/benchmark-hybrid-search.mjs"
   },
   "devDependencies": {
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
-    "sqlite-vec": "^0.1.7-alpha.2"
+    "sqlite-vec": "0.1.9"
   }
 }

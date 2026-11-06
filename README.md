@@ -64,6 +64,44 @@ las observaciones. Si la migración falla, el contenedor no arranca.
 por entidad; usa `observationOffset` para pedir la página siguiente y
 `observationLimit` para ajustar el tamaño (máximo 100).
 
+### `threshold` (cambio incompatible en beta)
+
+`threshold` es la distancia L2 máxima entre las **direcciones unitarias** de los
+embeddings semánticos; su rango MCP es `[0, 2]`. Para vectores finitos, no nulos y de
+dimensión compatible, se calcula `c = vec_distance_cosine(query, stored)`,
+`d_unit = sqrt(2*c)` y se acepta cuando `c <= threshold^2/2`. Así, distintas normas
+con la misma dirección tienen distancia 0. La búsqueda exacta FTS5 no se filtra por
+este umbral y permanece disponible si falla el canal vectorial.
+
+Es un cambio incompatible en beta: el default público MCP cambia de `0.35` a `0.75`,
+y `threshold` ahora es una distancia máxima, no una similitud mínima. Para vectores
+unitarios, `0.75` equivale a `cosine_min = 1 - 0.75^2/2 = 0.71875`. El default interno
+de `KnowledgeGraphManager.searchNodes` también es `0.75`; el schema MCP acepta `[0, 2]`.
+La alternativa de compatibilidad para aproximarse a una similitud coseno mínima de
+`0.35` es `threshold ≈ 1.140175`.
+
+#### Calibración sintética (no corpus lingüístico)
+
+`npm run benchmark:hybrid-search` ejecuta el benchmark determinista de 54 pares con
+similitudes alrededor de `0.3/0.5/0.7/0.9` y casos próximos a ambos cortes. Las
+etiquetas semánticas consideran positivos los grupos `0.7/0.9` y negativos `0.3/0.5`;
+cuatro pares adicionales modelan coincidencias FTS exactas positivas para el cálculo
+híbrido. Resultados:
+
+| L2 threshold | Canal | TP | FP | FN | Precision | Recall |
+|---:|---|---:|---:|---:|---:|---:|
+| `0.35` | Vectorial | 2 | 0 | 30 | 1.000 | 0.063 |
+| `0.35` | Híbrido | 6 | 0 | 26 | 1.000 | 0.188 |
+| `0.75` | Vectorial | 16 | 0 | 16 | 1.000 | 0.500 |
+| `0.75` | Híbrido | 20 | 0 | 12 | 1.000 | 0.625 |
+| `1.140175` | Vectorial | 30 | 11 | 2 | 0.732 | 0.938 |
+| `1.140175` | Híbrido | 32 | 11 | 0 | 0.744 | 1.000 |
+
+Es una ilustración geométrica reproducible y limitada, no un corpus lingüístico real ni
+evidencia de mejora neta; los pares FTS son etiquetas sintéticas, no una medición de
+BM25 real. Recalibra el umbral con un corpus lingüístico real antes de extraer
+conclusiones de calidad o rendimiento.
+
 ## Autor
 
 - **Gener Can Dzul** - [GNR092](https://github.com/GNR092)
