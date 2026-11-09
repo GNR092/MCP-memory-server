@@ -8,3 +8,4 @@ memorydata/
 docker-compose.yml
 build.sh
 opencode.json
+/test/
