@@ -1,6 +1,13 @@
 services:
   memorylocal:
-    image: gnr092/memoryproxy:latest
+    build:
+      context: .
+      args:
+        VERSION: "${VERSION:-2.0.1}"
+        USER_ID: "${USER_ID:-1000}"
+        GROUP_ID: "${GROUP_ID:-1000}"
+    # Si prefieres usar una imagen ya construida, comenta build y descomenta image:
+    # image: "${MEMORY_IMAGE:-gnr092/memoryproxy:v2.0.1}"
     container_name: memoryproxy
     # El puerto 8888 no tiene autenticación: solo escucha en localhost.
     # Para entrar desde otro equipo, usa un túnel SSH:
@@ -12,6 +19,8 @@ services:
     environment:
       - MEMORY_DB_PATH=/data/memory.db
       - TRANSFORMERS_CACHE=/data/.cache/transformers
+      - GRAPH_VIEWER_USER=${GRAPH_VIEWER_USER:-}
+      - GRAPH_VIEWER_PASSWORD=${GRAPH_VIEWER_PASSWORD:-}
     mem_limit: 1g
     memswap_limit: 1g
     restart: unless-stopped

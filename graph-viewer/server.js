@@ -1,6 +1,7 @@
 const express = require('express');
 const Database = require('better-sqlite3');
 const path = require('path');
+const createBasicAuthMiddleware = require('./basic-auth');
 
 const app = express();
 const PORT = process.env.PORT || 3022;
@@ -11,6 +12,10 @@ const SSE_HEARTBEAT_INTERVAL = 25000;
 const APP_VERSION = process.env.APP_VERSION ||
   require(path.join(__dirname, '..', 'package.json')).version || '0.0.0';
 
+app.use(createBasicAuthMiddleware(
+  process.env.GRAPH_VIEWER_USER,
+  process.env.GRAPH_VIEWER_PASSWORD
+));
 app.use(express.static(path.join(__dirname, 'public')));
 
 let db;

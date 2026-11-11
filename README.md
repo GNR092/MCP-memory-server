@@ -25,6 +25,21 @@ docker compose up --build
 
 El MCP queda en `http://localhost:8888/sse` y el visor del grafo en `http://localhost:8888/graph/`.
 
+### Autenticación opcional del visor
+
+El graph-viewer no requiere autenticación por defecto. Para habilitar HTTP Basic, define ambas
+variables antes de iniciar Compose:
+
+```bash
+export GRAPH_VIEWER_USER=viewer
+export GRAPH_VIEWER_PASSWORD='sustituye-por-una-clave-segura'
+docker compose up --build
+```
+
+Si solo se define una variable, el visor no arranca. Usa un gestor de secretos adecuado para
+tu despliegue; las variables de entorno son visibles para usuarios con acceso a inspeccionar
+el contenedor.
+
 El puerto **no tiene autenticación** y por eso solo escucha en `127.0.0.1`. Para entrar
 desde otro equipo usa un túnel SSH:
 
