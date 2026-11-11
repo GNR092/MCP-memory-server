@@ -9,3 +9,5 @@ docker-compose.yml
 build.sh
 opencode.json
 /test/
+
+TODO*.md
